@@ -32,7 +32,7 @@ java -jar ai-serving-assembly-<version>.jar
 ```
 
 ### Server Configuration
-By default, the HTTP endpoint is listening on `http://0.0.0.0:9090/`, and the gRPC port is `9091`. Users can customize those options that are defined in the [`application.conf`](). There are both ways to override the default options, one is to create a new config file based on the default one, then:
+By default, the HTTP endpoint is listening on `http://0.0.0.0:9090/`, and the gRPC port is `9091`. Users can customize those options that are defined in the [`application.conf`](https://github.com/autodeployai/ai-serving/blob/master/src/main/resources/application.conf). There are both ways to override the default options, one is to create a new config file based on the default one, then:
 
 ```
 java -Dconfig.file=/path/to/config-file -jar ai-serving-assembly-<version>.jar
@@ -41,7 +41,7 @@ java -Dconfig.file=/path/to/config-file -jar ai-serving-assembly-<version>.jar
 The other is to override each by setting Java system property, for example:
 
 ```
-java -Dservice.http.port=9000 -Dservice.grpc.port=9001 -Dservice.home="/path/to/writable-directory" -jar ai-serving-assembly-0.1.0.jar
+java -Dservice.http.port=9000 -Dservice.grpc.port=9001 -Dservice.home="/path/to/writable-directory" -jar ai-serving-assembly-<version>.jar
 ```
 
 AI-Serving is designed to be persistent or recoverable, so it needs a place to save all served models, that is specified by the property `service.home` that takes `/opt/ai-serving` as default, and the directory must be writable.
@@ -56,7 +56,7 @@ PMML4S is written in pure Scala that running in JVM, AI-Serving needs no special
 
 Leverages [ONNX Runtime](https://github.com/microsoft/onnxruntime) to infer ONNX models. ONNX Runtime is a performance-focused inference engine for ONNX models.
 
-ONNX Runtime is implemented in C/C++, and AI-Serving calls ONNX Runtime Java API to support ONNX models, it needs more configurations to work with ONNX. If you want just to deploy PMML models, please ignore current step.
+ONNX Runtime is implemented in C/C++, and AI-Serving calls ONNX Runtime Java API to support ONNX models, it needs more configurations to work with ONNX. If you want just to deploy PMML models, please ignore the current step.
 
 1. Firstly, users need to build both native libraries `JNI shared library` and `onnxruntime shared library` against your OS/Architecture: 
 
@@ -81,7 +81,12 @@ ONNX Runtime is implemented in C/C++, and AI-Serving calls ONNX Runtime Java API
 
 ## REST APIs
 
-When an error occurs, all APIs will return a JSON object likes:
+- [Validate API](#1-validate-api)
+- [Deploy API](#2-deploy-api)
+- [Model Metadata API](#3-model-metadata-api)
+- [Predict API](#4-predict-api)
+
+When an error occurs, all APIs will return a JSON object as follows:
 ```
 {
   "error": <an error message string>
@@ -145,7 +150,7 @@ PUT http://host:port/v1/models/${MODEL_NAME}
 ```
 
 #### Request:
-Model with `Content-Type`, see validation request above for details
+Model with `Content-Type`, see validation request above for details.
 
 #### Response:
 ```
@@ -256,11 +261,9 @@ POST http://host:port/v1/models/${MODEL_NAME}[/versions/${MODEL_VERSION}]
 /versions/${MODEL_VERSION} is optional. If omitted the latest version is used.
 
 #### Request:
-The request payload could have two formats: JSON and binary, the HTTP header `Content-Type` tells the server which format to handle and thus it is required for all requests.
+The request body could have two formats: JSON and binary, the HTTP header `Content-Type` tells the server which format to handle and thus it is required for all requests.
 
-* `Content-Type: application/json`
-
-  The JSON object formatted as following:
+* `Content-Type: application/json`. The request body must be a JSON object formatted as follows:
   ```
   {
     "X": {
@@ -289,20 +292,18 @@ The request payload could have two formats: JSON and binary, the HTTP header `Co
     "filter": <list>
   }
   ```
-  The `X` can take more than one records, as you see above, there are two formats supported:
+  The `X` could take more than one records, as you see above, there are two formats supported. Users can use any one, usually the `split` format is smaller for multiple records.
   - `records` : list like [{column -> value}, … , {column -> value}]
   - `split` : dict like {columns -> [columns], data -> [values]}
 
-  Users can use any one, usually the `split` format is smaller for multiple records.
-
 * `Content-Type: application/octet-stream`, `application/vnd.google.protobuf` or `application/x-protobuf`. 
   
-  The request is a protobuf message [`PredictRequest`]() of gRPC API, besides of those common scalar values, it can contain the standard [`onnx.TensorProto`]() value directly.
+  The request body must be the protobuf message [`PredictRequest`](https://github.com/autodeployai/ai-serving/blob/master/src/main/protobuf/ai-serving.proto#L152) of gRPC API, besides of those common scalar values, it can use the standard [`onnx.TensorProto`](https://github.com/autodeployai/ai-serving/blob/master/src/main/protobuf/onnx-ml.proto#L304) value directly.
 
 #### Response:
 The server always return the same type as your request.
 
-* For the JSON format. The output object formatted as following:
+* For the JSON format. The response body is a JSON object formatted as follows:
 ```
 {
   "result": {
@@ -328,19 +329,20 @@ The server always return the same type as your request.
   }
 }
 ```
-* For the binary format. The output is a protobuf message [`PredictResponse`]() of gRPC API.
+* For the binary format. The response body is the protobuf message [`PredictResponse`](https://github.com/autodeployai/ai-serving/blob/master/src/main/protobuf/ai-serving.proto#L164) of gRPC API.
 
 Generally speaking, the binary payload has better latency, especially for the big tensor value for ONNX models, while the JSON format is easy for human readability.
 
 ## gRPC APIs
-See the protobuf file [`ai-serving.proto`]() for details. You could generate your client and make a gRPC call to it using your favorite language. To learn more about how to generate the client code and call to the server, please refer to [the tutorials of gRPC](https://grpc.io/docs/tutorials/).
+See the protobuf file [`ai-serving.proto`](https://github.com/autodeployai/ai-serving/blob/master/src/main/protobuf/ai-serving.proto) for details. You could generate your client and make a gRPC call to it using your favorite language. To learn more about how to generate the client code and call to the server, please refer to [the tutorials of gRPC](https://grpc.io/docs/tutorials/).
 
 ## Examples
 
-We can use the `Iris` decision tree model [single_iris_dectree.xml](http://dmg.org/pmml/pmml_examples/KNIME_PMML_4.1_Examples/single_iris_dectree.xml) and the pre-trained [MNIST model](https://github.com/onnx/models/tree/master/vision/classification/mnist) ONNX 1.3 to see REST APIs in action. 
+We can use the `Iris` decision tree model [single_iris_dectree.xml](http://dmg.org/pmml/pmml_examples/KNIME_PMML_4.1_Examples/single_iris_dectree.xml) and the pre-trained [MNIST model](https://github.com/onnx/models/tree/master/vision/classification/mnist) of ONNX 1.3 to see REST APIs in action. 
 
-Start AI-Serving with proper ONNX configuration.
+### Start AI-Serving with proper ONNX configuration
 
+### Make REST API calls to AI-Serving
 In a different terminal, run `cd $REPO_ROOT/src/test/resources`, use the `curl` tool to make REST API calls.
 
 Validate a PMML model as follows:
@@ -561,7 +563,7 @@ Predict the ONNX model using binary payload in `records` as follows:
 ```
 curl -X POST --data-binary @mnist_request_0.pb -H "Content-Type: application/octet-stream" http://localhost:9090/v1/models/mnist -o response1.pb
 ```
-The `response1.pb` is a binary file in protobuf format, it's an instance of [PredictResponse]() message, you could use the generated client from `ai-serving.proto` to read it.
+The `response1.pb` is a binary file in protobuf format, it's an instance of `PredictResponse` message, you could use the generated client from `ai-serving.proto` to read it.
 
 
 ## Support
