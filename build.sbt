@@ -6,7 +6,7 @@ organization := "ai.autodeploy"
 
 organizationHomepage := Some(new URL("https://autodeploy.ai"))
 
-description := "Serving AI models by open standard formats PMML and ONNX"
+description := "Serving AI models in open standard formats PMML and ONNX with both HTTP and gRPC endpoints"
 
 homepage := Some(new URL("https://github.com/autodeployai/ai-serving"))
 
