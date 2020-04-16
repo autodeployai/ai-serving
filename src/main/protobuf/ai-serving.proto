@@ -1,0 +1,214 @@
+syntax = "proto3";
+
+import "onnx-ml.proto";
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/timestamp.proto";
+
+package ai.autodeploy.serving.protobuf;
+
+// Provides access to AI models served by AI-Serving.
+service DeploymentService {
+    rpc Validate (ValidateRequest) returns (ModelInfo);
+
+    rpc Deploy (DeployRequest) returns (DeployResponse);
+    rpc Undeploy (UndeployRequest) returns (UndeployResponse);
+
+    rpc Predict (PredictRequest) returns (PredictResponse);
+
+    rpc GetModelMetadata (GetModelMetadataRequest) returns (GetModelMetadataResponse);
+}
+
+// Specifies model with its type to validate.
+// Currently, both types "PMML" and "ONNX" are supported.
+message ValidateRequest {
+    bytes model = 1;
+    string type = 2;
+}
+
+// Specifies a servable name, and model with its type.
+// Currently, both types "PMML" and "ONNX" are supported.
+message DeployRequest {
+    string name = 1;
+    bytes model = 2;
+    string type = 3;
+}
+
+message DeployResponse {
+    // Specifies the deployed model specification:
+    // the specified servable name and the deployed version starts from 1.
+    ModelSpec model_spec = 1;
+}
+
+message UndeployRequest {
+    // Specifies which model to un-deploy.
+    ModelSpec model_spec = 1;
+}
+
+message UndeployResponse {
+    // Specifies which model has been un-deployed.
+    ModelSpec model_spec = 1;
+}
+
+message GetModelMetadataRequest {
+    // Specifies which model to get metadata.
+    ModelSpec model_spec = 1;
+}
+
+message GetModelMetadataResponse {
+    // Specifies which model metadata is returned.
+    ModelSpec model_spec = 1;
+
+    // Model metadata.
+    repeated ModelMetadata metadata = 2;
+}
+
+message ModelInfo {
+    // Model type.
+    string type = 1;
+    // Model serialization type.
+    string serialization = 2;
+    // The runtime library to handle such model.
+    string runtime = 3;
+    // A list of predictors involved to predict this model.
+    repeated Field predictors = 4;
+    // A list of targets.
+    repeated Field targets = 5;
+    // A list of outputs could be produced by this model.
+    repeated Field outputs = 6;
+    // A list of redundancy fields not picked up by this model.
+    repeated Field redundancies = 7;
+    // Model algorithm.
+    string algorithm = 8;
+    // Mining function: regression, classification, clustering, or associationRules.
+    string function_name = 9;
+    // Model description.
+    string description = 10;
+    // Model version.
+    google.protobuf.Int32Value version = 11;
+    // The version of model serialization standard.
+    string format_version = 12;
+    // The MD5 hash string of this model file.
+    string hash = 13;
+    // The size of this model file in bytes
+    int64 size = 14;
+    // Model creation timestamp.
+    google.protobuf.Timestamp created_at = 15;
+    // The application that generated this model.
+    string app = 16;
+    // The version of the application.
+    string app_version = 17;
+    // Model copyright.
+    string copyright = 18;
+    // Original model source.
+    string source = 19;
+}
+
+// Field info
+message Field {
+    // A unique name.
+    string name = 1;
+    // Field type, main two kinds:
+    // - scalar types for PMML models: float, double, integer, string and so on.
+    // - tensor, map, and list for ONNX models.
+    string type = 2;
+    // Determines which operations are defined on the values:
+    // - categorical
+    // - ordinal
+    // - continuous
+    string optype = 3;
+    // Field shape dimensions, mainly used for the tensor field, None for others.
+    repeated int64 shape = 4;
+    // A string describes valid values for this field.
+    string values = 5;
+}
+
+// Model metadata with versions
+message ModelMetadata {
+    // Model ID
+    string id = 1;
+    // A unique model name
+    string name = 2;
+    // Model creation timestamp.
+    google.protobuf.Timestamp created_at = 3;
+    // Model last updated timestamp.
+    google.protobuf.Timestamp update_at = 4;
+    // The latest version number.
+    int32 latest_version = 5;
+    // Model version(s).
+    repeated ModelInfo versions = 6;
+}
+
+// Contains the model name and version
+message ModelSpec {
+    // Required servable name.
+    string name = 1;
+
+    // Optional choice of which version of the model to use.
+    // The latest version is used when left unspecified
+    google.protobuf.Int32Value version = 2;
+}
+
+// Request to predict
+message PredictRequest {
+    ModelSpec model_spec = 1;
+
+    // Input payload
+    RecordSpec X = 2;
+
+    // Output filters to specify which output fields need to be returned.
+    // If the list is empty, all outputs will be included.
+    repeated string filter = 3;
+}
+
+// Response for predicting request on successful run
+message PredictResponse {
+    ModelSpec model_spec = 1;
+
+    // Output result
+    RecordSpec result = 2;
+}
+
+// Takes more than one records, there are two formats supported:
+// - `records` : list like [{column -> value}, … , {column -> value}]
+// - `split` : dict like {columns -> [columns], data -> [values]}
+message RecordSpec {
+    repeated Record records = 1;
+    repeated string columns = 2;
+    repeated ListValue data = 3;
+}
+
+message Record {
+    // Unordered map of dynamically typed values.
+    map<string, Value> fields = 1;
+}
+
+// Extends `Value` of `Struct` with the support of TensorValue
+message Value {
+    // The kind of value.
+    oneof kind {
+        // Represents a null value.
+        NullValue null_value = 1;
+        // Represents a double value.
+        double number_value = 2;
+        // Represents a string value.
+        string string_value = 3;
+        // Represents a boolean value.
+        bool bool_value = 4;
+        // Represents a structured value.
+        Record record_value = 5;
+        // Represents a repeated `Value`.
+        ListValue list_value = 6;
+        // Represents a tensor `Value`.
+        onnx.TensorProto tensor_value = 7;
+    }
+}
+
+enum NullValue {
+    // Null value.
+    NULL_VALUE = 0;
+}
+
+message ListValue {
+    // Repeated field of dynamically typed values.
+    repeated Value values = 1;
+}

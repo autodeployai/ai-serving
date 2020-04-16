@@ -1,0 +1,77 @@
+{
+  "algorithm": "TreeModel",
+  "app": "KNIME",
+  "appVersion": "2.8.0",
+  "copyright": "KNIME",
+  "formatVersion": "4.1",
+  "functionName": "classification",
+  "outputs": [
+    {
+      "name": "predicted_class",
+      "optype": "nominal",
+      "type": "string"
+    },
+    {
+      "name": "probability",
+      "optype": "continuous",
+      "type": "real"
+    },
+    {
+      "name": "probability_Iris-setosa",
+      "optype": "continuous",
+      "type": "real"
+    },
+    {
+      "name": "probability_Iris-versicolor",
+      "optype": "continuous",
+      "type": "real"
+    },
+    {
+      "name": "probability_Iris-virginica",
+      "optype": "continuous",
+      "type": "real"
+    },
+    {
+      "name": "node_id",
+      "optype": "nominal",
+      "type": "string"
+    }
+  ],
+  "predictors": [
+    {
+      "name": "sepal_length",
+      "optype": "continuous",
+      "type": "double",
+      "values": "[4.3,7.9]"
+    },
+    {
+      "name": "sepal_width",
+      "optype": "continuous",
+      "type": "double",
+      "values": "[2.0,4.4]"
+    },
+    {
+      "name": "petal_length",
+      "optype": "continuous",
+      "type": "double",
+      "values": "[1.0,6.9]"
+    },
+    {
+      "name": "petal_width",
+      "optype": "continuous",
+      "type": "double",
+      "values": "[0.1,2.5]"
+    }
+  ],
+  "runtime": "PMML4S",
+  "serialization": "pmml",
+  "targets": [
+    {
+      "name": "class",
+      "optype": "nominal",
+      "type": "string",
+      "values": "Iris-setosa,Iris-versicolor,Iris-virginica"
+    }
+  ],
+  "type": "PMML"
+}

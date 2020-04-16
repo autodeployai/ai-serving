@@ -1,0 +1,9 @@
+/target/
+/project/project/
+/project/target/
+/.idea/
+/.settings/
+/.project
+**/.DS_Store
+/.history/
+

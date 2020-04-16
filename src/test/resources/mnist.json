@@ -1,0 +1,27 @@
+{
+  "outputs": [
+    {
+      "name": "Plus214_Output_0",
+      "shape": [
+        1,
+        10
+      ],
+      "type": "tensor(float)"
+    }
+  ],
+  "predictors": [
+    {
+      "name": "Input3",
+      "shape": [
+        1,
+        1,
+        28,
+        28
+      ],
+      "type": "tensor(float)"
+    }
+  ],
+  "runtime": "ONNX Runtime",
+  "serialization": "onnx",
+  "type": "ONNX"
+}
