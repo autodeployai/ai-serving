@@ -22,6 +22,7 @@ import ai.autodeploy.serving.errors.ModelNotFoundException
 import ai.autodeploy.serving.model._
 import ai.autodeploy.serving.utils.Utils
 import com.typesafe.config.ConfigFactory
+import org.slf4j.LoggerFactory
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable.ArrayBuffer
@@ -31,6 +32,8 @@ import scala.concurrent.{ExecutionContext, Future}
  * Main entry of models validation, management and deployment.
  */
 object ModelManager extends JsonSupport {
+
+  val log = LoggerFactory.getLogger(this.getClass)
 
   val config = ConfigFactory.load()
 
@@ -42,6 +45,7 @@ object ModelManager extends JsonSupport {
     case "test" => Files.createTempDirectory("ai-serving-test-").toAbsolutePath.toString
     case value  => value
   }
+  log.info(s"Service home located: ${HOME_PATH}")
 
   val modelPool: TrieMap[String, ModelCache] = TrieMap.empty
 
