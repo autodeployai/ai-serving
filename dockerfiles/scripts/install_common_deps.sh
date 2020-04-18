@@ -11,8 +11,8 @@ apt-get update && apt-get install -y --no-install-recommends \
         libcurl4-openssl-dev \
         libssl-dev \
         openjdk-8-jdk \
-        ca-certificates-java 
-rm -rf /var/lib/apt/lists/*
+        ca-certificates-java \&&
+        rm -rf /var/lib/apt/lists/*
 
 # Dependencies: sbt
 sudo wget --quiet https://piccolo.link/sbt-1.3.6.tgz

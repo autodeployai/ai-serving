@@ -10,8 +10,8 @@ apt-get update && apt-get install -y --no-install-recommends \
         curl \
         libcurl4-openssl-dev \
         libssl-dev \
-        python3-dev 
-rm -rf /var/lib/apt/lists/*
+        python3-dev \&&
+        rm -rf /var/lib/apt/lists/*
 
 # Dependencies: gradle
 sudo wget --quiet https://services.gradle.org/distributions/gradle-6.3-bin.zip

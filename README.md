@@ -13,25 +13,31 @@ AI Serving is a flexible, high-performance inferencing system for machine learni
 
 ## Installation
 
-### Building
+### Installing Using Docker
+The easiest and most straight-forward way of using AI-Serving is with [Docker images](dockerfiles/README.MD).
+
+### Installing Natively on Your System
 The [`sbt`](https://www.scala-sbt.org/) build system is required.
 ```
 cd REPO_ROOT
 sbt assembly
 ```
-### Build Output
+**Build Output**
+
 An assembly jar will be generated:
 ```
 $REPO_ROOT/target/scala-2.13/ai-serving-assembly-<version>.jar
 ```
 
-### Start the Server
+**Start the Server**
+
 Simply run:
 ```
 java -jar ai-serving-assembly-<version>.jar
 ```
 
-### Server Configuration
+**Server Configuration**
+
 By default, the HTTP endpoint is listening on `http://0.0.0.0:9090/`, and the gRPC port is `9091`. Users can customize those options that are defined in the [`application.conf`](https://github.com/autodeployai/ai-serving/blob/master/src/main/resources/application.conf). There are both ways to override the default options, one is to create a new config file based on the default one, then:
 
 ```
@@ -46,6 +52,8 @@ java -Dservice.http.port=9000 -Dservice.grpc.port=9001 -Dservice.home="/path/to/
 
 AI-Serving is designed to be persistent or recoverable, so it needs a place to save all served models, that is specified by the property `service.home` that takes `/opt/ai-serving` as default, and the directory must be writable.
 
+AI-Serving supports PMML natively, while ONNX needs further [ONNX Runtime Configuration](#onnx-runtime-configuration).
+
 ## PMML
 
 Integrates [PMML4S](https://github.com/autodeployai/pmml4s) to score PMML models. PMML4S is a lightweight, clean and efficient implementation based on the PMML specification from 2.0 through to the latest 4.4. 
@@ -58,6 +66,7 @@ Leverages [ONNX Runtime](https://github.com/microsoft/onnxruntime) to infer ONNX
 
 ONNX Runtime is implemented in C/C++, and AI-Serving calls ONNX Runtime Java API to support ONNX models, it needs more configurations to work with ONNX. If you want just to deploy PMML models, please ignore the current step.
 
+### ONNX Runtime Configuration
 1. Firstly, users need to build both native libraries `JNI shared library` and `onnxruntime shared library` against your OS/Architecture: 
 
     Use the [onnxtime build instructions](https://github.com/microsoft/onnxruntime/blob/master/BUILD.md) with the `--build_java` option.
@@ -334,13 +343,23 @@ The server always return the same type as your request.
 Generally speaking, the binary payload has better latency, especially for the big tensor value for ONNX models, while the JSON format is easy for human readability.
 
 ## gRPC APIs
-See the protobuf file [`ai-serving.proto`](https://github.com/autodeployai/ai-serving/blob/master/src/main/protobuf/ai-serving.proto) for details. You could generate your client and make a gRPC call to it using your favorite language. To learn more about how to generate the client code and call to the server, please refer to [the tutorials of gRPC](https://grpc.io/docs/tutorials/).
+See the protobuf file [`ai-serving.proto`](src/main/protobuf/ai-serving.proto) for details. You could generate your client and make a gRPC call to it using your favorite language. To learn more about how to generate the client code and call to the server, please refer to [the tutorials of gRPC](https://grpc.io/docs/tutorials/).
 
 ## Examples
 
 We can use the `Iris` decision tree model [single_iris_dectree.xml](http://dmg.org/pmml/pmml_examples/KNIME_PMML_4.1_Examples/single_iris_dectree.xml) and the pre-trained [MNIST model](https://github.com/onnx/models/tree/master/vision/classification/mnist) of ONNX 1.3 to see REST APIs in action. 
 
-### Start AI-Serving with proper ONNX configuration
+### Start AI-Serving.
+We will use Docker to run the AI-Serving:
+```
+docker pull autodeployai/ai-serving:latest
+docker run --rm -it -v /opt/ai-serving:/opt/ai-serving -p 9090:9090 -p 9091:9091 autodeployai/ai-serving:latest
+
+16:06:47.722 INFO  AI-Serving-akka.actor.default-dispatcher-5 akka.event.slf4j.Slf4jLogger             Slf4jLogger started
+16:06:47.833 INFO  main            ai.autodeploy.serving.AIServer$          Predicting thread pool size: 16
+16:06:48.305 INFO  main            a.autodeploy.serving.protobuf.GrpcServer AI-Serving grpc server started, listening on 9091
+16:06:49.433 INFO  main            ai.autodeploy.serving.AIServer$          AI-Serving http server started, listening on http://0.0.0.0:9090/
+```
 
 ### Make REST API calls to AI-Serving
 In a different terminal, run `cd $REPO_ROOT/src/test/resources`, use the `curl` tool to make REST API calls.
@@ -559,7 +578,33 @@ curl -X POST -d '{"X": {"columns": ["sepal_length", "sepal_width", "petal_length
 }
 ```
 
-Predict the ONNX model using binary payload in `records` as follows:
+Predict the ONNX model using the REST payload in `records` as follows:
+```
+curl -X POST -d @mnist_request_0.json -H "Content-Type: application/json" http://localhost:9090/v1/models/mnist
+{
+  "result": [
+    {
+      "Plus214_Output_0": [
+        [
+          975.6703491210938,
+          -618.7241821289062,
+          6574.5654296875,
+          668.0283203125,
+          -917.2710571289062,
+          -1671.6361083984375,
+          -1952.7598876953125,
+          -61.54957580566406,
+          -777.1764526367188,
+          -1439.5316162109375
+        ]
+      ]
+    }
+  ]
+}
+```
+
+
+Predict the ONNX model using the binary payload in `records` as follows:
 ```
 curl -X POST --data-binary @mnist_request_0.pb -H "Content-Type: application/octet-stream" http://localhost:9090/v1/models/mnist -o response1.pb
 ```
