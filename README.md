@@ -2,6 +2,33 @@
 
 Serving AI models in open standard formats [PMML](http://dmg.org/pmml/v4-4/GeneralStructure.html) and [ONNX](https://onnx.ai/) with both HTTP and gRPC endpoints.
 
+## Content
+
+- [Features](#features)
+- [Prerequisites](#prerequisites) 
+- [Installation](#installation)
+    - [Installing Using Docker](#installing-using-docker)
+    - [Installing Natively on Your System](#installing-natively-on-your-system)
+        - [Install sbt](#install-sbt)
+        - [Build Output](#build-output)
+        - [Start the Server](#start-the-server)
+        - [Server Configuration](#server-configuration)
+- [PMML](#pmml)
+- [ONNX](#onnx)
+    - [ONNX Runtime Configuration](#onnx-runtime-configuration)
+        - [Build ONNX Runtime](#build-onnx-runtime)
+        - [Use ONNX Runtime](#use-onnx-runtime)
+- [REST APIs](#rest-apis)
+    - [Validate API](#1-validate-api)
+    - [Deploy API](#2-deploy-api)
+    - [Model Metadata API](#3-model-metadata-api)
+    - [Predict API](#4-predict-api)
+- [gRPC APIs](#grpc-apis)
+- [Examples](#examples)
+- [Deploy and Manage AI models at scale](#deploy-and-manage-ai-models-at-scale)
+- [Support](#support)
+- [License](#license)
+
 ## Features
 
 AI Serving is a flexible, high-performance inferencing system for machine learning and deep learning models, designed for production environments. AI Serving provides out-of-the-box integration with PMML and ONNX models, but can be easily extended to serve other formats of models. The next candidate format could be [PFA](http://dmg.org/pfa/index.html).
@@ -14,39 +41,42 @@ AI Serving is a flexible, high-performance inferencing system for machine learni
 ## Installation
 
 ### Installing Using Docker
-The easiest and most straight-forward way of using AI-Serving is with [Docker images](dockerfiles/README.MD).
+The easiest and most straight-forward way of using AI-Serving is with [Docker images](dockerfiles).
 
 ### Installing Natively on Your System
+
+#### Install sbt
+
 The [`sbt`](https://www.scala-sbt.org/) build system is required.
-```
+```bash
 cd REPO_ROOT
 sbt assembly
 ```
-**Build Output**
+#### Build Output
 
 An assembly jar will be generated:
-```
+```bash
 $REPO_ROOT/target/scala-2.13/ai-serving-assembly-<version>.jar
 ```
 
-**Start the Server**
+#### Start the Server
 
 Simply run:
-```
+```bash
 java -jar ai-serving-assembly-<version>.jar
 ```
 
-**Server Configuration**
+#### Server Configuration
 
-By default, the HTTP endpoint is listening on `http://0.0.0.0:9090/`, and the gRPC port is `9091`. Users can customize those options that are defined in the [`application.conf`](https://github.com/autodeployai/ai-serving/blob/master/src/main/resources/application.conf). There are both ways to override the default options, one is to create a new config file based on the default one, then:
+By default, the HTTP endpoint is listening on `http://0.0.0.0:9090/`, and the gRPC port is `9091`. You can customize those options that are defined in the [`application.conf`](src/main/resources/application.conf). There are several ways to override the default options, one is to create a new config file based on the default one, then:
 
-```
+```bash
 java -Dconfig.file=/path/to/config-file -jar ai-serving-assembly-<version>.jar
 ```
 
-The other is to override each by setting Java system property, for example:
+Another is to override each by setting Java system property, for example:
 
-```
+```bash
 java -Dservice.http.port=9000 -Dservice.grpc.port=9001 -Dservice.home="/path/to/writable-directory" -jar ai-serving-assembly-<version>.jar
 ```
 
@@ -62,31 +92,38 @@ PMML4S is written in pure Scala that running in JVM, AI-Serving needs no special
 
 ## ONNX
 
-Leverages [ONNX Runtime](https://github.com/microsoft/onnxruntime) to infer ONNX models. ONNX Runtime is a performance-focused inference engine for ONNX models.
+Leverages [ONNX Runtime](https://github.com/microsoft/onnxruntime) to make predictions for ONNX models. ONNX Runtime is a performance-focused inference engine for ONNX models.
 
 ONNX Runtime is implemented in C/C++, and AI-Serving calls ONNX Runtime Java API to support ONNX models, it needs more configurations to work with ONNX. If you want just to deploy PMML models, please ignore the current step.
 
 ### ONNX Runtime Configuration
-1. Firstly, users need to build both native libraries `JNI shared library` and `onnxruntime shared library` against your OS/Architecture: 
 
-    Use the [onnxtime build instructions](https://github.com/microsoft/onnxruntime/blob/master/BUILD.md) with the `--build_java` option.
+#### Build ONNX Runtime
+   
+You need to build both native libraries `JNI shared library` and `onnxruntime shared library` for your OS/Architecture: 
+   
+Please, refer to the [onnxtime build instructions](https://github.com/microsoft/onnxruntime/blob/master/BUILD.md), and the `--build_java` option always must be specified.
 
-2. Then, load the native libraries when running AI-Serving.
- 
-    See [Build Output](https://github.com/microsoft/onnxruntime/tree/master/java#build-output) lists all generated outputs.
 
-    Currently, the jar `onnxruntime-<version-number>.jar` has not been published into Maven distribution, in order to not break down the build, AI-Serving contains the latest version in `$REPO_ROOT/lib`. This jar contains just classes, so it's cross-platform. 
+#### Use ONNX Runtime
+    
+Load the native libraries when running AI-Serving. Please, see [Build Output](https://github.com/microsoft/onnxruntime/tree/master/java#build-output) lists all generated outputs.
 
-    There are several different ways to load both native libraries:
-    - Put both `onnxruntime-<version-number>-jni.jar` and `onnxruntime-<version-number>-lib.jar` into `$REPO_ROOT/lib`, then regenerate the assembly jar to harvest both. That's all, it's probably the easiest way.
-    - Explicitly specify the path to the shared library:
-      ```
-      java -Donnxruntime.native.onnxruntime4j_jni.path=/path/to/onnxruntime4j_jni -Donnxruntime.native.onnxruntime.path=/path/to/onnxruntime -jar ai-serving-assembly-<version>.jar
-      ```
-    - Load from library path:
-      ```
-      java -Djava.library.path=/path/to/native_libraries -jar ai-serving-assembly-<version>.jar
-      ```
+The ONNX Runtime jar `onnxruntime-<version-number>.jar` has not been published into Maven distribution, in order to not break down the build, AI-Serving contains the latest version in `$REPO_ROOT/lib`. This jar contains just classes, so it's cross-platform. 
+
+There are several different ways to load both native libraries:
+
+- Put both `onnxruntime-<version-number>-jni.jar` and `onnxruntime-<version-number>-lib.jar` into `$REPO_ROOT/lib`, then regenerate the assembly jar to harvest both. That is probably the easiest way.
+
+- Explicitly specify the path to the shared library:
+  ```bash
+  java -Donnxruntime.native.onnxruntime4j_jni.path=/path/to/onnxruntime4j_jni -Donnxruntime.native.onnxruntime.path=/path/to/onnxruntime -jar ai-serving-assembly-<version>.jar
+  ```
+  
+- Load from library path:
+  ```bash
+  java -Djava.library.path=/path/to/native_libraries -jar ai-serving-assembly-<version>.jar
+  ```
 
 ## REST APIs
 
@@ -114,10 +151,10 @@ Model with `Content-Type` that tells the server which format to handle:
  * `Content-Type: application/xml`, or `Content-Type: text/xml`, the input is treated as a PMML model.
  * `Content-Type: application/octet-stream`, `application/vnd.google.protobuf` or `application/x-protobuf`, the input is processed as an ONNX model.
  
-If no `Content-Type` specified, the server can infer it from the input entity, but it could fail.
+If no `Content-Type` specified, the server can probe the content type from the input entity, but it could fail.
 
 #### Response:
-Model metadata includes type, predictor list, output list, and so on.
+Model metadata includes the model type, predictor list, output list, and so on.
 ```
 {
   "type": <model_type>
@@ -301,13 +338,15 @@ The request body could have two formats: JSON and binary, the HTTP header `Conte
     "filter": <list>
   }
   ```
-  The `X` could take more than one records, as you see above, there are two formats supported. Users can use any one, usually the `split` format is smaller for multiple records.
+  The `X` can take more than one records, as you see above, there are two formats supported. You could use any one, usually the `split` format is smaller for multiple records.
   - `records` : list like [{column -> value}, … , {column -> value}]
   - `split` : dict like {columns -> [columns], data -> [values]}
 
 * `Content-Type: application/octet-stream`, `application/vnd.google.protobuf` or `application/x-protobuf`. 
   
   The request body must be the protobuf message [`PredictRequest`](https://github.com/autodeployai/ai-serving/blob/master/src/main/protobuf/ai-serving.proto#L152) of gRPC API, besides of those common scalar values, it can use the standard [`onnx.TensorProto`](https://github.com/autodeployai/ai-serving/blob/master/src/main/protobuf/onnx-ml.proto#L304) value directly.
+
+* Otherwise, an error will be returned.
 
 #### Response:
 The server always return the same type as your request.
@@ -343,15 +382,15 @@ The server always return the same type as your request.
 Generally speaking, the binary payload has better latency, especially for the big tensor value for ONNX models, while the JSON format is easy for human readability.
 
 ## gRPC APIs
-See the protobuf file [`ai-serving.proto`](src/main/protobuf/ai-serving.proto) for details. You could generate your client and make a gRPC call to it using your favorite language. To learn more about how to generate the client code and call to the server, please refer to [the tutorials of gRPC](https://grpc.io/docs/tutorials/).
+Please, refer to the protobuf file [`ai-serving.proto`](src/main/protobuf/ai-serving.proto) for details. You could generate your client and make a gRPC call to it using your favorite language. To learn more about how to generate the client code and call to the server, please refer to [the tutorials of gRPC](https://grpc.io/docs/tutorials/).
 
 ## Examples
 
-We can use the `Iris` decision tree model [single_iris_dectree.xml](http://dmg.org/pmml/pmml_examples/KNIME_PMML_4.1_Examples/single_iris_dectree.xml) and the pre-trained [MNIST model](https://github.com/onnx/models/tree/master/vision/classification/mnist) of ONNX 1.3 to see REST APIs in action. 
+We will use the `Iris` decision tree model [single_iris_dectree.xml](http://dmg.org/pmml/pmml_examples/KNIME_PMML_4.1_Examples/single_iris_dectree.xml) and the pre-trained [MNIST model](https://github.com/onnx/models/tree/master/vision/classification/mnist) in ONNX 1.3 to see REST APIs in action. 
 
 ### Start AI-Serving.
 We will use Docker to run the AI-Serving:
-```
+```bash
 docker pull autodeployai/ai-serving:latest
 docker run --rm -it -v /opt/ai-serving:/opt/ai-serving -p 9090:9090 -p 9091:9091 autodeployai/ai-serving:latest
 
@@ -364,8 +403,8 @@ docker run --rm -it -v /opt/ai-serving:/opt/ai-serving -p 9090:9090 -p 9091:9091
 ### Make REST API calls to AI-Serving
 In a different terminal, run `cd $REPO_ROOT/src/test/resources`, use the `curl` tool to make REST API calls.
 
-Validate a PMML model as follows:
-```
+**Validate a PMML model as follows:**
+```bash
 curl -X PUT --data-binary @single_iris_dectree.xml -H "Content-Type: application/xml"  http://localhost:9090/v1/validate
 {
   "algorithm": "TreeModel",
@@ -446,8 +485,8 @@ curl -X PUT --data-binary @single_iris_dectree.xml -H "Content-Type: application
 }
 ```
 
-Validate an ONNX model as follows:
-```
+**Validate an ONNX model as follows:**
+```bash
 curl -X PUT --data-binary @mnist.onnx -H "Content-Type: application/octet-stream"  http://localhost:9090/v1/validate
 {
   "outputs": [
@@ -478,8 +517,8 @@ curl -X PUT --data-binary @mnist.onnx -H "Content-Type: application/octet-stream
 }
 ```
 
-Deploy a PMML model as follows:
-```
+**Deploy a PMML model as follows:**
+```bash
 curl -X PUT --data-binary @single_iris_dectree.xml -H "Content-Type: application/xml"  http://localhost:9090/v1/models/iris
 {
   "name": "iris",
@@ -487,8 +526,8 @@ curl -X PUT --data-binary @single_iris_dectree.xml -H "Content-Type: application
 }
 ```
 
-Deploy an ONNX model as follows:
-```
+**Deploy an ONNX model as follows:**
+```bash
 curl -X PUT --data-binary @mnist.onnx -H "Content-Type: application/octet-stream"  http://localhost:9090/v1/models/mnist
 {
   "name": "mnist",
@@ -496,8 +535,8 @@ curl -X PUT --data-binary @mnist.onnx -H "Content-Type: application/octet-stream
 }
 ```
 
-Get metadata of the model as follows:
-```
+**Get metadata of the model as follows:**
+```bash
 curl -X GET http://localhost:9090/v1/models/mnist
 {
   "createdAt": "2020-04-16T15:18:18",
@@ -541,8 +580,8 @@ curl -X GET http://localhost:9090/v1/models/mnist
 }
 ```
 
-Predict the PMML model using payload in `records` as follows:
-```
+**Predict the PMML model using payload in `records` as follows:**
+```bash
 curl -X POST -d '{"X": [{"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2}]}' -H "Content-Type: application/json"  http://localhost:9090/v1/models/iris
 {
   "result": [
@@ -558,8 +597,8 @@ curl -X POST -d '{"X": [{"sepal_length": 5.1, "sepal_width": 3.5, "petal_length"
 }
 ```
 
-Predict the PMML model using payload in `split` with a filter as follows:
-```
+**Predict the PMML model using payload in `split` with a filter as follows:**
+```bash
 curl -X POST -d '{"X": {"columns": ["sepal_length", "sepal_width", "petal_length", "petal_width"],"data":[[5.1, 3.5, 1.4, 0.2], [7, 3.2, 4.7, 1.4]]}, "filter": ["predicted_class"]}' -H "Content-Type: application/json"  http://localhost:9090/v1/models/iris
 {
   "result": {
@@ -578,8 +617,8 @@ curl -X POST -d '{"X": {"columns": ["sepal_length", "sepal_width", "petal_length
 }
 ```
 
-Predict the ONNX model using the REST payload in `records` as follows:
-```
+**Predict the ONNX model using the REST payload in `records` as follows:**
+```bash
 curl -X POST -d @mnist_request_0.json -H "Content-Type: application/json" http://localhost:9090/v1/models/mnist
 {
   "result": [
@@ -603,13 +642,28 @@ curl -X POST -d @mnist_request_0.json -H "Content-Type: application/json" http:/
 }
 ```
 
-
-Predict the ONNX model using the binary payload in `records` as follows:
+**Predict the ONNX model using the binary payload in `records` as follows:**
+```bash
+curl -X POST --data-binary @mnist_request_0.pb -o response1.pb -H "Content-Type: application/octet-stream" http://localhost:9090/v1/models/mnist
 ```
-curl -X POST --data-binary @mnist_request_0.pb -H "Content-Type: application/octet-stream" http://localhost:9090/v1/models/mnist -o response1.pb
-```
-The `response1.pb` is a binary file in protobuf format, it's an instance of `PredictResponse` message, you could use the generated client from `ai-serving.proto` to read it.
 
+Save the binary response to `response1.pb` that is in the `protobuf` format, an instance of [PredictResponse]() message, you could use the generated client from `ai-serving.proto` to read it.
+
+Note, the content type of `predict` request must be specified explicitly and take one of four candidates. An incorrect request URL or body returns an HTTP error status.
+```bash
+curl -i -X POST -d @mnist_request_0.json  http://localhost:9090/v1/models/mnist
+HTTP/1.1 400 Bad Request
+Server: akka-http/10.1.11
+Date: Sun, 19 Apr 2020 06:25:25 GMT
+Connection: close
+Content-Type: application/json
+Content-Length: 92
+
+{"error":"Prediction request takes unknown content type: application/x-www-form-urlencoded"}
+```
+
+## Deploy and Manage AI models at scale
+See the [DaaS](https://www.autodeploy.ai/) system that deploys AI & ML models in production at scale on Kubernetes.
 
 ## Support
 If you have any questions about the _AI-Serving_ library, please open issues on this repository.
