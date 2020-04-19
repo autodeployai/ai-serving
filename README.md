@@ -644,10 +644,10 @@ curl -X POST -d @mnist_request_0.json -H "Content-Type: application/json" http:/
 
 **Predict the ONNX model using the binary payload in `records` as follows:**
 ```bash
-curl -X POST --data-binary @mnist_request_0.pb -o response1.pb -H "Content-Type: application/octet-stream" http://localhost:9090/v1/models/mnist
+curl -X POST --data-binary @mnist_request_0.pb -o response_0.pb -H "Content-Type: application/octet-stream" http://localhost:9090/v1/models/mnist
 ```
 
-Save the binary response to `response1.pb` that is in the `protobuf` format, an instance of [PredictResponse]() message, you could use the generated client from `ai-serving.proto` to read it.
+Save the binary response to `response_0.pb` that is in the `protobuf` format, an instance of `PredictResponse` message, you could use the generated client from `ai-serving.proto` to read it.
 
 Note, the content type of `predict` request must be specified explicitly and take one of four candidates. An incorrect request URL or body returns an HTTP error status.
 ```bash
