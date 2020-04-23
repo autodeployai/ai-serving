@@ -2,12 +2,12 @@
 
 Serving AI models in open standard formats [PMML](http://dmg.org/pmml/v4-4/GeneralStructure.html) and [ONNX](https://onnx.ai/) with both HTTP and gRPC endpoints.
 
-## Content
+## Table of Contents
 
 - [Features](#features)
 - [Prerequisites](#prerequisites) 
 - [Installation](#installation)
-    - [Installing Using Docker](#installing-using-docker)
+    - [Installing using Docker](#installing-using-docker)
     - [Installing Natively on Your System](#installing-natively-on-your-system)
         - [Install sbt](#install-sbt)
         - [Build Output](#build-output)
@@ -25,6 +25,10 @@ Serving AI models in open standard formats [PMML](http://dmg.org/pmml/v4-4/Gener
     - [Predict API](#4-predict-api)
 - [gRPC APIs](#grpc-apis)
 - [Examples](#examples)
+    - [Python](#python)
+    - [Curl](#curl)
+      - [Scoring PMML models](#scoring-pmml-models)
+      - [Scoring ONNX models](#scoring-onnx-models)
 - [Deploy and Manage AI models at scale](#deploy-and-manage-ai-models-at-scale)
 - [Support](#support)
 - [License](#license)
@@ -40,7 +44,7 @@ AI Serving is a flexible, high-performance inferencing system for machine learni
 
 ## Installation
 
-### Installing Using Docker
+### Installing using Docker
 The easiest and most straight-forward way of using AI-Serving is with [Docker images](dockerfiles).
 
 ### Installing Natively on Your System
@@ -141,7 +145,7 @@ When an error occurs, all APIs will return a JSON object as follows:
 
 ### 1. Validate API
 
-#### Validation URL:
+#### URL:
 ```
 PUT http://host:port/v1/validate
 ```
@@ -386,9 +390,15 @@ Please, refer to the protobuf file [`ai-serving.proto`](src/main/protobuf/ai-ser
 
 ## Examples
 
-We will use the `Iris` decision tree model [single_iris_dectree.xml](http://dmg.org/pmml/pmml_examples/KNIME_PMML_4.1_Examples/single_iris_dectree.xml) and the pre-trained [MNIST model](https://github.com/onnx/models/tree/master/vision/classification/mnist) in ONNX 1.3 to see REST APIs in action. 
+### Python
+- [Serving ONNX models with AI-Serving](examples/AIServingMnistOnnxModel.ipynb) 
 
-### Start AI-Serving.
+
+### Curl
+- [Scoring PMML models](#scoring-pmml-models)
+- [Scoring ONNX models](#scoring-onnx-models)
+
+#### Start AI-Serving
 We will use Docker to run the AI-Serving:
 ```bash
 docker pull autodeployai/ai-serving:latest
@@ -400,10 +410,14 @@ docker run --rm -it -v /opt/ai-serving:/opt/ai-serving -p 9090:9090 -p 9091:9091
 16:06:49.433 INFO  main            ai.autodeploy.serving.AIServer$          AI-Serving http server started, listening on http://0.0.0.0:9090/
 ```
 
-### Make REST API calls to AI-Serving
+#### Make REST API calls to AI-Serving
 In a different terminal, run `cd $REPO_ROOT/src/test/resources`, use the `curl` tool to make REST API calls.
 
-**Validate a PMML model as follows:**
+
+#### Scoring PMML models
+We will use the `Iris` decision tree model [single_iris_dectree.xml](http://dmg.org/pmml/pmml_examples/KNIME_PMML_4.1_Examples/single_iris_dectree.xml) to see REST APIs in action.
+
+* ##### Validate the PMML model
 ```bash
 curl -X PUT --data-binary @single_iris_dectree.xml -H "Content-Type: application/xml"  http://localhost:9090/v1/validate
 {
@@ -485,7 +499,151 @@ curl -X PUT --data-binary @single_iris_dectree.xml -H "Content-Type: application
 }
 ```
 
-**Validate an ONNX model as follows:**
+* ##### Deploy the PMML model
+```bash
+curl -X PUT --data-binary @single_iris_dectree.xml -H "Content-Type: application/xml"  http://localhost:9090/v1/models/iris
+{
+  "name": "iris",
+  "version": 1
+}
+```
+
+* ##### Get metadata of the PMML model
+```bash
+curl -X GET http://localhost:9090/v1/models/iris
+{
+  "createdAt": "2020-04-23T06:29:32",
+  "id": "56fa4917-e904-4364-9c15-4c87d84ec2c4",
+  "latestVersion": 1,
+  "name": "iris",
+  "updateAt": "2020-04-23T06:29:32",
+  "versions": [
+    {
+      "algorithm": "TreeModel",
+      "app": "KNIME",
+      "appVersion": "2.8.0",
+      "copyright": "KNIME",
+      "createdAt": "2020-04-23T06:29:32",
+      "formatVersion": "4.1",
+      "functionName": "classification",
+      "hash": "fc44c33123836be368d3f24829360020",
+      "outputs": [
+        {
+          "name": "predicted_class",
+          "optype": "nominal",
+          "type": "string"
+        },
+        {
+          "name": "probability",
+          "optype": "continuous",
+          "type": "real"
+        },
+        {
+          "name": "probability_Iris-setosa",
+          "optype": "continuous",
+          "type": "real"
+        },
+        {
+          "name": "probability_Iris-versicolor",
+          "optype": "continuous",
+          "type": "real"
+        },
+        {
+          "name": "probability_Iris-virginica",
+          "optype": "continuous",
+          "type": "real"
+        },
+        {
+          "name": "node_id",
+          "optype": "nominal",
+          "type": "string"
+        }
+      ],
+      "predictors": [
+        {
+          "name": "sepal_length",
+          "optype": "continuous",
+          "type": "double",
+          "values": "[4.3,7.9]"
+        },
+        {
+          "name": "sepal_width",
+          "optype": "continuous",
+          "type": "double",
+          "values": "[2.0,4.4]"
+        },
+        {
+          "name": "petal_length",
+          "optype": "continuous",
+          "type": "double",
+          "values": "[1.0,6.9]"
+        },
+        {
+          "name": "petal_width",
+          "optype": "continuous",
+          "type": "double",
+          "values": "[0.1,2.5]"
+        }
+      ],
+      "runtime": "PMML4S",
+      "serialization": "pmml",
+      "size": 3497,
+      "targets": [
+        {
+          "name": "class",
+          "optype": "nominal",
+          "type": "string",
+          "values": "Iris-setosa,Iris-versicolor,Iris-virginica"
+        }
+      ],
+      "type": "PMML",
+      "version": 1
+    }
+  ]
+}
+```
+
+* ##### Predict the PMML model using the JSON payload in `records`
+```bash
+curl -X POST -d '{"X": [{"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2}]}' -H "Content-Type: application/json"  http://localhost:9090/v1/models/iris
+{
+  "result": [
+    {
+      "node_id": "1",
+      "probability_Iris-setosa": 1.0,
+      "predicted_class": "Iris-setosa",
+      "probability_Iris-virginica": 0.0,
+      "probability_Iris-versicolor": 0.0,
+      "probability": 1.0
+    }
+  ]
+}
+```
+
+* ##### Predict the PMML model using the JSON payload in `split` with filters
+```bash
+curl -X POST -d '{"X": {"columns": ["sepal_length", "sepal_width", "petal_length", "petal_width"],"data":[[5.1, 3.5, 1.4, 0.2], [7, 3.2, 4.7, 1.4]]}, "filter": ["predicted_class"]}' -H "Content-Type: application/json"  http://localhost:9090/v1/models/iris
+{
+  "result": {
+    "columns": [
+      "predicted_class"
+    ],
+    "data": [
+      [
+        "Iris-setosa"
+      ],
+      [
+        "Iris-versicolor"
+      ]
+    ]
+  }
+}
+```
+
+#### Scoring ONNX models
+We will use the pre-trained [MNIST Handwritten Digit Recognition ONNX Model](https://github.com/onnx/models/tree/master/vision/classification/mnist) to see REST APIs in action. 
+
+* ##### Validate the ONNX model
 ```bash
 curl -X PUT --data-binary @mnist.onnx -H "Content-Type: application/octet-stream"  http://localhost:9090/v1/validate
 {
@@ -517,16 +675,7 @@ curl -X PUT --data-binary @mnist.onnx -H "Content-Type: application/octet-stream
 }
 ```
 
-**Deploy a PMML model as follows:**
-```bash
-curl -X PUT --data-binary @single_iris_dectree.xml -H "Content-Type: application/xml"  http://localhost:9090/v1/models/iris
-{
-  "name": "iris",
-  "version": 1
-}
-```
-
-**Deploy an ONNX model as follows:**
+* ##### Deploy the ONNX model
 ```bash
 curl -X PUT --data-binary @mnist.onnx -H "Content-Type: application/octet-stream"  http://localhost:9090/v1/models/mnist
 {
@@ -535,7 +684,7 @@ curl -X PUT --data-binary @mnist.onnx -H "Content-Type: application/octet-stream
 }
 ```
 
-**Get metadata of the model as follows:**
+* ##### Get metadata of the ONNX model
 ```bash
 curl -X GET http://localhost:9090/v1/models/mnist
 {
@@ -580,44 +729,7 @@ curl -X GET http://localhost:9090/v1/models/mnist
 }
 ```
 
-**Predict the PMML model using payload in `records` as follows:**
-```bash
-curl -X POST -d '{"X": [{"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2}]}' -H "Content-Type: application/json"  http://localhost:9090/v1/models/iris
-{
-  "result": [
-    {
-      "node_id": "1",
-      "probability_Iris-setosa": 1.0,
-      "predicted_class": "Iris-setosa",
-      "probability_Iris-virginica": 0.0,
-      "probability_Iris-versicolor": 0.0,
-      "probability": 1.0
-    }
-  ]
-}
-```
-
-**Predict the PMML model using payload in `split` with a filter as follows:**
-```bash
-curl -X POST -d '{"X": {"columns": ["sepal_length", "sepal_width", "petal_length", "petal_width"],"data":[[5.1, 3.5, 1.4, 0.2], [7, 3.2, 4.7, 1.4]]}, "filter": ["predicted_class"]}' -H "Content-Type: application/json"  http://localhost:9090/v1/models/iris
-{
-  "result": {
-    "columns": [
-      "predicted_class"
-    ],
-    "data": [
-      [
-        "Iris-setosa"
-      ],
-      [
-        "Iris-versicolor"
-      ]
-    ]
-  }
-}
-```
-
-**Predict the ONNX model using the REST payload in `records` as follows:**
+* ##### Predict the ONNX model using the REST payload in `records`
 ```bash
 curl -X POST -d @mnist_request_0.json -H "Content-Type: application/json" http://localhost:9090/v1/models/mnist
 {
@@ -642,7 +754,7 @@ curl -X POST -d @mnist_request_0.json -H "Content-Type: application/json" http:/
 }
 ```
 
-**Predict the ONNX model using the binary payload in `records` as follows:**
+* ##### Predict the ONNX model using the binary payload
 ```bash
 curl -X POST --data-binary @mnist_request_0.pb -o response_0.pb -H "Content-Type: application/octet-stream" http://localhost:9090/v1/models/mnist
 ```
