@@ -26,6 +26,8 @@ Serving AI models in open standard formats [PMML](http://dmg.org/pmml/v4-4/Gener
 - [gRPC APIs](#grpc-apis)
 - [Examples](#examples)
     - [Python](#python)
+      - [Serving ONNX models with AI-Serving](examples/AIServingMnistOnnxModel.ipynb)
+      - [Serving PMML models with AI-Serving](examples/AIServingIrisXGBoostPMMLModel.ipynb) 
     - [Curl](#curl)
       - [Scoring PMML models](#scoring-pmml-models)
       - [Scoring ONNX models](#scoring-onnx-models)
@@ -391,8 +393,8 @@ Please, refer to the protobuf file [`ai-serving.proto`](src/main/protobuf/ai-ser
 ## Examples
 
 ### Python
-- [Serving ONNX models with AI-Serving](examples/AIServingMnistOnnxModel.ipynb) 
-
+- [Serving ONNX models with AI-Serving](examples/AIServingMnistOnnxModel.ipynb)
+- [Serving PMML models with AI-Serving](examples/AIServingIrisXGBoostPMMLModel.ipynb) 
 
 ### Curl
 - [Scoring PMML models](#scoring-pmml-models)
