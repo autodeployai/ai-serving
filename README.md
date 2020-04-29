@@ -1,6 +1,6 @@
 # AI-Serving
 
-Serving AI models in open standard formats [PMML](http://dmg.org/pmml/v4-4/GeneralStructure.html) and [ONNX](https://onnx.ai/) with both HTTP and gRPC endpoints.
+Serving AI/ML models in the open standard formats [PMML](http://dmg.org/pmml/v4-4/GeneralStructure.html) and [ONNX](https://onnx.ai/) with both HTTP and gRPC endpoints.
 
 ## Table of Contents
 
@@ -26,12 +26,12 @@ Serving AI models in open standard formats [PMML](http://dmg.org/pmml/v4-4/Gener
 - [gRPC APIs](#grpc-apis)
 - [Examples](#examples)
     - [Python](#python)
-      - [Serving ONNX models with AI-Serving](examples/AIServingMnistOnnxModel.ipynb)
       - [Serving PMML models with AI-Serving](examples/AIServingIrisXGBoostPMMLModel.ipynb) 
+      - [Serving ONNX models with AI-Serving](examples/AIServingMnistOnnxModel.ipynb)
     - [Curl](#curl)
       - [Scoring PMML models](#scoring-pmml-models)
       - [Scoring ONNX models](#scoring-onnx-models)
-- [Deploy and Manage AI models at scale](#deploy-and-manage-ai-models-at-scale)
+- [Deploy and Manage AI/ML models at scale](#deploy-and-manage-aiml-models-at-scale)
 - [Support](#support)
 - [License](#license)
 
@@ -776,8 +776,8 @@ Content-Length: 92
 {"error":"Prediction request takes unknown content type: application/x-www-form-urlencoded"}
 ```
 
-## Deploy and Manage AI models at scale
-See the [DaaS](https://www.autodeploy.ai/) system that deploys AI & ML models in production at scale on Kubernetes.
+## Deploy and Manage AI/ML models at scale
+See the [DaaS](https://www.autodeploy.ai/) system that deploys AI/ML models in production at scale on Kubernetes.
 
 ## Support
 If you have any questions about the _AI-Serving_ library, please open issues on this repository.
