@@ -23,7 +23,6 @@ import ai.autodeploy.serving.protobuf.Value.Kind
 import ai.autodeploy.serving.protobuf._
 import com.google.protobuf.ByteString
 
-@org.scalatest.Ignore
 class OnnxGrpcSpec extends BaseGrpcSpec {
 
   // The model is ONNX 1.3 from https://github.com/onnx/models/tree/master/vision/classification/mnist

@@ -29,7 +29,6 @@ import akka.util.ByteString
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
-@org.scalatest.Ignore
 class OnnxHttpSpec extends BaseHttpSpec {
 
   // The model is ONNX 1.3 from https://github.com/onnx/models/tree/master/vision/classification/mnist

@@ -7,17 +7,17 @@ Serving AI/ML models in the open standard formats [PMML](http://dmg.org/pmml/v4-
 - [Features](#features)
 - [Prerequisites](#prerequisites) 
 - [Installation](#installation)
-    - [Installing using Docker](#installing-using-docker)
-    - [Installing Natively on Your System](#installing-natively-on-your-system)
-        - [Install sbt](#install-sbt)
-        - [Build Output](#build-output)
-        - [Start the Server](#start-the-server)
-        - [Server Configuration](#server-configuration)
+    - [Install using Docker](#install-using-docker)
+    - [Install from Source](#install-from-source)
+        - [Install SBT](#install-sbt)
+        - [Build Assembly](#build-assembly)
+        - [Start Server](#start-server)
+        - [Server Configurations](#server-configurations)
 - [PMML](#pmml)
 - [ONNX](#onnx)
-    - [ONNX Runtime Configuration](#onnx-runtime-configuration)
+    - [Advanced ONNX Runtime Configuration](#advanced-onnx-runtime-configuration)
         - [Build ONNX Runtime](#build-onnx-runtime)
-        - [Use ONNX Runtime](#use-onnx-runtime)
+        - [Load ONNX Runtime](#load-onnx-runtime)
 - [REST APIs](#rest-apis)
     - [Validate API](#1-validate-api)
     - [Deploy API](#2-deploy-api)
@@ -46,33 +46,49 @@ AI Serving is a flexible, high-performance inferencing system for machine learni
 
 ## Installation
 
-### Installing using Docker
+### Install using Docker
 The easiest and most straight-forward way of using AI-Serving is with [Docker images](dockerfiles).
 
-### Installing Natively on Your System
+### Install from Source
 
-#### Install sbt
+#### Install SBT
 
-The [`sbt`](https://www.scala-sbt.org/) build system is required.
+The [`sbt`](https://www.scala-sbt.org/) build system is required. After sbt installed, clone this repository, then change into the repository root directory:
 ```bash
 cd REPO_ROOT
-sbt assembly
 ```
-#### Build Output
+
+#### Build Assembly
+
+AI-Serving depends on [ONNX Runtime](https://github.com/microsoft/onnxruntime) to support ONNX models, and the default CPU accelerator (OpenMP) is used for ONNX Runtime:
+```bash
+
+sbt clean assembly
+```
+
+Set the property `-Dgpu=true` to use the GPU accelerator (CUDA) for [ONNX Runtime](https://github.com/microsoft/onnxruntime):
+```bash
+sbt -Dgpu=true clean assembly
+```
+
+Run `set test in assembly := {}` to disable unit tests if you want to skip them when generating an assembly jar:
+```bash
+sbt -Dgpu=true 'set test in assembly := {}' clean assembly
+```
 
 An assembly jar will be generated:
 ```bash
 $REPO_ROOT/target/scala-2.13/ai-serving-assembly-<version>.jar
 ```
 
-#### Start the Server
+#### Start Server
 
 Simply run:
 ```bash
 java -jar ai-serving-assembly-<version>.jar
 ```
 
-#### Server Configuration
+#### Server Configurations
 
 By default, the HTTP endpoint is listening on `http://0.0.0.0:9090/`, and the gRPC port is `9091`. You can customize those options that are defined in the [`application.conf`](src/main/resources/application.conf). There are several ways to override the default options, one is to create a new config file based on the default one, then:
 
@@ -88,21 +104,23 @@ java -Dservice.http.port=9000 -Dservice.grpc.port=9001 -Dservice.home="/path/to/
 
 AI-Serving is designed to be persistent or recoverable, so it needs a place to save all served models, that is specified by the property `service.home` that takes `/opt/ai-serving` as default, and the directory must be writable.
 
-AI-Serving supports PMML natively, while ONNX needs further [ONNX Runtime Configuration](#onnx-runtime-configuration).
-
 ## PMML
 
 Integrates [PMML4S](https://github.com/autodeployai/pmml4s) to score PMML models. PMML4S is a lightweight, clean and efficient implementation based on the PMML specification from 2.0 through to the latest 4.4. 
 
-PMML4S is written in pure Scala that running in JVM, AI-Serving needs no special configuration to support PMML models.
+PMML4S is written in pure Scala that running in JVM, AI-Serving needs no special configurations to support PMML models.
 
 ## ONNX
 
 Leverages [ONNX Runtime](https://github.com/microsoft/onnxruntime) to make predictions for ONNX models. ONNX Runtime is a performance-focused inference engine for ONNX models.
 
-ONNX Runtime is implemented in C/C++, and AI-Serving calls ONNX Runtime Java API to support ONNX models, it needs more configurations to work with ONNX. If you want just to deploy PMML models, please ignore the current step.
+ONNX Runtime is implemented in C/C++, and AI-Serving calls ONNX Runtime Java API to support ONNX models. ONNX Runtime can support various architectures with multiple hardware accelerators, refer to the table on [aka.ms/onnxruntime](https://microsoft.github.io/onnxruntime/) for details.
 
-### ONNX Runtime Configuration
+Since both CPU and GPU binaries of X64 have been distributed to the [Maven Central](https://mvnrepository.com/artifact/com.microsoft.onnxruntime), AI-Serving depends on them directly now, the CPU is used by default, and you can switch to GPU via the property `-Dgpu=true` defined above. 
+
+If you depend on other different OS/architectures or hardware accelerators, refer to the next topic [Advanced ONNX Runtime Configuration](#advanced-onnx-runtime-configuration), otherwise, ignore it.
+
+### Advanced ONNX Runtime Configuration
 
 #### Build ONNX Runtime
    
@@ -110,25 +128,11 @@ You need to build both native libraries `JNI shared library` and `onnxruntime sh
    
 Please, refer to the [onnxtime build instructions](https://github.com/microsoft/onnxruntime/blob/master/BUILD.md), and the `--build_java` option always must be specified.
 
-
-#### Use ONNX Runtime
+#### Load ONNX Runtime
     
-Load the native libraries when running AI-Serving. Please, see [Build Output](https://github.com/microsoft/onnxruntime/tree/master/java#build-output) lists all generated outputs.
-
-The ONNX Runtime jar `onnxruntime-<version-number>.jar` has not been published into Maven distribution, in order to not break down the build, AI-Serving contains the latest version in `$REPO_ROOT/lib`. This jar contains just classes, so it's cross-platform. 
-
-There are several different ways to load both native libraries:
-
-- Put both `onnxruntime-<version-number>-jni.jar` and `onnxruntime-<version-number>-lib.jar` into `$REPO_ROOT/lib`, then regenerate the assembly jar to harvest both. That is probably the easiest way.
-
-- Explicitly specify the path to the shared library:
+Please, see [Build Output](https://github.com/microsoft/onnxruntime/tree/master/java#build-output) lists all generated outputs. Explicitly specify the path to the shared library when starting AI-Serving:
   ```bash
   java -Donnxruntime.native.onnxruntime4j_jni.path=/path/to/onnxruntime4j_jni -Donnxruntime.native.onnxruntime.path=/path/to/onnxruntime -jar ai-serving-assembly-<version>.jar
-  ```
-  
-- Load from library path:
-  ```bash
-  java -Djava.library.path=/path/to/native_libraries -jar ai-serving-assembly-<version>.jar
   ```
 
 ## REST APIs

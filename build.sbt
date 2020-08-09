@@ -1,12 +1,12 @@
 name := "ai-serving"
 
-version := "0.1.0"
+version := "0.9.0"
 
 organization := "ai.autodeploy"
 
 organizationHomepage := Some(new URL("https://autodeploy.ai"))
 
-description := "Serving AI models in open standard formats PMML and ONNX with both HTTP and gRPC endpoints"
+description := "Serving AI/ML models in the open standard formats PMML and ONNX with both HTTP and gRPC endpoints"
 
 homepage := Some(new URL("https://github.com/autodeployai/ai-serving"))
 
@@ -22,10 +22,15 @@ scalacOptions in(Compile, doc) := Seq("-no-link-warnings")
 
 val akkaVersion = "2.6.4"
 val akkaHttpVersion = "10.1.11"
+val pmml4sVersion = "0.9.7"
+val onnxruntimeVersion = "1.4.0"
 
 libraryDependencies ++= {
-  Seq(
-    "org.pmml4s" %% "pmml4s" % "0.9.5",
+  (sys.props.getOrElse("gpu", "false") match {
+    case "true" | "1" => Some("com.microsoft.onnxruntime" % "onnxruntime_gpu" % onnxruntimeVersion)
+    case _            => Some("com.microsoft.onnxruntime" % "onnxruntime" % onnxruntimeVersion)
+  }).toSeq ++ Seq(
+    "org.pmml4s" %% "pmml4s" % pmml4sVersion,
     "com.typesafe.akka" %% "akka-http" % akkaHttpVersion,
     "com.typesafe.akka" %% "akka-stream" % akkaVersion,
     "com.typesafe.akka" %% "akka-http-spray-json" % akkaHttpVersion,
@@ -55,3 +60,5 @@ assemblyMergeStrategy in assembly := {
     val oldStrategy = (assemblyMergeStrategy in assembly).value
     oldStrategy(x)
 }
+
+
