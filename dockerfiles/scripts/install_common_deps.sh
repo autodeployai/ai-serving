@@ -10,8 +10,9 @@ apt-get update && apt-get install -y --no-install-recommends \
         curl \
         libcurl4-openssl-dev \
         libssl-dev \
+        libgomp1 \
         openjdk-8-jdk \
-        ca-certificates-java \&&
+        ca-certificates-java &&\
         rm -rf /var/lib/apt/lists/*
 
 # Dependencies: sbt
