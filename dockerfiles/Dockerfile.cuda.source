@@ -3,14 +3,14 @@
 # Licensed under the Apache License, Version 2.0 (the "License").
 # --------------------------------------------------------------
 
-FROM ubuntu:16.04
+FROM nvidia/cuda:10.1-cudnn7-devel
 MAINTAINER AutoDeployAI "autodeploy.ai@gmail.com"
 
 ARG AI_SERVING_REPO=https://github.com/autodeployai/ai-serving
 ARG AI_SERVING_BRANCH=master
 ARG ONNXRUNTIME_REPO=https://github.com/Microsoft/onnxruntime
 ARG ONNXRUNTIME_BRANCH=master
-ARG ONNXRUNTIME_BUILD_DIR=build/Linux/Release
+ARG ONNXRUNTIME_JAVA_BUILD_LIBS=build/Linux/Release
 
 RUN apt-get update &&\
   apt-get install -y sudo git bash &&\
@@ -20,20 +20,20 @@ WORKDIR /code
 ENV \
   LANG=C.UTF-8 \
   JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 \
-  PATH=/code/sbt/bin:/code/gradle-6.3/bin:/code/cmake-3.14.3-Linux-x86_64/bin:${PATH}
+  PATH=/usr/local/nvidia/bin:/usr/local/cuda/bin:/code/sbt/bin:/code/gradle-6.3/bin:/code/cmake-3.14.3-Linux-x86_64/bin:${PATH}
 
-# Prepare ai-serving and onnxruntime repositories & build onnxruntime with CPU (OpenMP)
+# Prepare ai-serving and onnxruntime repositories & build onnxruntime with CUDA
 RUN git clone --single-branch --branch ${AI_SERVING_BRANCH} --recursive ${AI_SERVING_REPO} ai-serving &&\
   git clone --single-branch --branch ${ONNXRUNTIME_BRANCH} --recursive ${ONNXRUNTIME_REPO} onnxruntime &&\
   /bin/sh ai-serving/dockerfiles/scripts/install_common_deps.sh &&\
   /bin/sh ai-serving/dockerfiles/scripts/install_onnxruntime_deps.sh &&\
   cd onnxruntime &&\
-  /bin/sh ./build.sh --use_openmp --config Release --build_shared_lib --build_java --update --build --parallel --cmake_extra_defines ONNXRUNTIME_VERSION=$(cat ./VERSION_NUMBER) &&\
+  /bin/sh ./build.sh --cuda_home /usr/local/cuda --cudnn_home /usr/lib/x86_64-linux-gnu/ --use_cuda --config Release --build_shared_lib --build_java --update --build --parallel --cmake_extra_defines ONNXRUNTIME_VERSION=$(cat ./VERSION_NUMBER) &&\
   mkdir -p /onnxruntime &&\
   cp ${ONNXRUNTIME_BUILD_DIR}/libonnxruntime.so /onnxruntime &&\
   cp ${ONNXRUNTIME_BUILD_DIR}/libonnxruntime4j_jni.so /onnxruntime &&\
   cd ../ai-serving &&\
-  sbt assembly &&\
+  sbt -Dgpu=true assembly &&\
   mkdir -p /ai-serving &&\
   cp target/scala-2.13/*.jar /ai-serving &&\
   cd /ai-serving &&\
