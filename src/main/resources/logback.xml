@@ -3,7 +3,7 @@
 <configuration scan="true">
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <Pattern>%-12(%d{HH:mm:ss.SSS}) %highlight(%-5level) %-15(%thread) %cyan(%-40logger{40}) %msg%n</Pattern>
+            <Pattern>%-12(%d{HH:mm:ss.SSS}) %highlight(%-5level) %-15(%thread) %cyan(%-40logger{40}@%M:%line) %msg%n</Pattern>
         </encoder>
     </appender>
 

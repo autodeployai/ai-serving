@@ -38,7 +38,7 @@ object ErrorHandler extends ErrorJsonSupport {
     }
     case ex: Throwable      => {
       val error = ex.getMessage
-      log.error(error)
+      log.error("Unexpected error:", ex)
       complete(InternalServerError, Error(error))
     }
     case _                  => {
