@@ -42,5 +42,5 @@ RUN git clone --single-branch --branch ${AI_SERVING_BRANCH} --recursive ${AI_SER
   rm -rf ~/.cache && rm -rf ~/.ivy2 && rm -rf ~/.sbt && rm -rf /tmp/* && rm -rf ~/.gradle
 
 WORKDIR /ai-serving
-ENTRYPOINT exec java $JAVA_OPTS -Donnxruntime.native.onnxruntime4j_jni.path=/onnxruntime/libonnxruntime4j_jni.so -Donnxruntime.native.onnxruntime.path=/onnxruntime/libonnxruntime.so -jar ai-serving-assembly.jar
+ENTRYPOINT exec java $JAVA_OPTS -Donnxruntime.backend=cuda -Donnxruntime.native.onnxruntime4j_jni.path=/onnxruntime/libonnxruntime4j_jni.so -Donnxruntime.native.onnxruntime.path=/onnxruntime/libonnxruntime.so -jar ai-serving-assembly.jar
 

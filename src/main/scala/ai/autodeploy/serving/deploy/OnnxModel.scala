@@ -25,6 +25,8 @@ import ai.autodeploy.serving.utils.DataUtils._
 import ai.autodeploy.serving.utils.Utils._
 import ai.onnxruntime.OrtSession.SessionOptions
 import ai.onnxruntime._
+import com.typesafe.config.ConfigFactory
+import org.slf4j.LoggerFactory
 
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
@@ -283,9 +285,54 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
 
 object OnnxModel extends ModelLoader {
 
+  val log = LoggerFactory.getLogger(this.getClass)
+  val config = ConfigFactory.load()
+
   lazy val env = OrtEnvironment.getEnvironment()
   lazy val opts = {
-    (new SessionOptions)
+    val obj = new SessionOptions()
+
+    // optimization level
+    val level = config.getString("onnxruntime.optimization-level") match {
+      case "no"       => SessionOptions.OptLevel.NO_OPT
+      case "basic"    => SessionOptions.OptLevel.BASIC_OPT
+      case "extended" => SessionOptions.OptLevel.EXTENDED_OPT
+      case _          => SessionOptions.OptLevel.ALL_OPT
+    }
+    log.info(s"ONNXRuntime optimization level: ${level}")
+    obj.setOptimizationLevel(level)
+
+    // execution mode
+    val mode = config.getString("onnxruntime.execution-mode") match {
+      case "parallel" => SessionOptions.ExecutionMode.PARALLEL
+      case _          => SessionOptions.ExecutionMode.SEQUENTIAL
+    }
+    log.info(s"ONNXRuntime execution mode: ${mode}")
+    obj.setExecutionMode(mode)
+
+    // execution backend
+    val gpu = (sys.props.getOrElse("gpu", "false").toLowerCase match {
+      case "true" | "1" => true
+      case _            => false
+    })
+    val backend = if (gpu) "cuda" else config.getString("onnxruntime.backend").toLowerCase
+    log.info(s"ONNXRuntime execution backend: ${backend}")
+    try {
+      backend match {
+        case "cuda" => obj.addCUDA(config.getInt("onnxruntime.device-id"))
+        case "dnnl" => obj.addDnnl(true)
+        case "tensorrt" => obj.addTensorrt(config.getInt("onnxruntime.device-id"))
+        case "directml" => obj.addDirectML(config.getInt("onnxruntime.device-id"))
+        case _ =>
+      }
+    } catch {
+      case ex: OrtException => {
+        log.error(s"Failed to set execution backend '${backend}', then try to use the default CPU", ex)
+      }
+      case ex: Throwable    => throw ex
+    }
+
+    obj
   }
 
   def load(path: Path): OnnxModel = {
@@ -295,7 +342,7 @@ object OnnxModel extends ModelLoader {
       new OnnxModel(session, env)
     } catch {
       case ex: java.lang.UnsatisfiedLinkError => throw OnnxRuntimeLibraryNotFoundError(ex.getMessage)
-      case ex: Throwable                      => throw InvalidModelException("ONNX", ex.getMessage)
+      case ex: Throwable                      => throw ex
     }
   }
 

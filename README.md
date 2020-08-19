@@ -83,10 +83,16 @@ $REPO_ROOT/target/scala-2.13/ai-serving-assembly-<version>.jar
 
 #### Start Server
 
-Simply run:
+Simply run with the default CPU backend for ONNX models:
 ```bash
 java -jar ai-serving-assembly-<version>.jar
 ```
+
+GPU backend for ONNX models:
+```bash
+java -Donnxruntime.backend=cuda -jar ai-serving-assembly-<version>.jar
+```
+Several available execution backends: TensorRT, DirectML, Dnnl and so on. See [Advanced ONNX Runtime Configuration](#advanced-onnx-runtime-configuration) for details.
 
 #### Server Configurations
 
@@ -132,7 +138,7 @@ Please, refer to the [onnxtime build instructions](https://github.com/microsoft/
     
 Please, see [Build Output](https://github.com/microsoft/onnxruntime/tree/master/java#build-output) lists all generated outputs. Explicitly specify the path to the shared library when starting AI-Serving:
   ```bash
-  java -Donnxruntime.native.onnxruntime4j_jni.path=/path/to/onnxruntime4j_jni -Donnxruntime.native.onnxruntime.path=/path/to/onnxruntime -jar ai-serving-assembly-<version>.jar
+  java -Donnxruntime.backend=execution_backend -Donnxruntime.native.onnxruntime4j_jni.path=/path/to/onnxruntime4j_jni -Donnxruntime.native.onnxruntime.path=/path/to/onnxruntime -jar ai-serving-assembly-<version>.jar
   ```
 
 ## REST APIs

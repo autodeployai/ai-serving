@@ -32,5 +32,5 @@ RUN git clone --single-branch --branch ${AI_SERVING_BRANCH} --recursive ${AI_SER
   rm -rf ~/.cache && rm -rf ~/.ivy2 && rm -rf ~/.sbt && rm -rf /tmp/*
 
 WORKDIR /ai-serving
-ENTRYPOINT exec java $JAVA_OPTS -jar ai-serving-assembly.jar
+ENTRYPOINT exec java $JAVA_OPTS -Donnxruntime.backend=cuda -jar ai-serving-assembly.jar
 
