@@ -161,33 +161,39 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
   }
 
 
-  private def convertToTensor(name: String, tensorInfo: TensorInfo, inputValue: Option[Any]): OnnxTensor = inputValue match {
+  private def convertToTensor(name: String, tensorInfo: TensorInfo, inputValue: Option[Any], inputShape: Option[Seq[Long]] = None): OnnxTensor = inputValue match {
     case Some(value) => {
       import OnnxJavaType._
       val expectedShape = tensorInfo.getShape
       value match {
+        case (v, s: Seq[Long]) => {
+          convertToTensor(name, tensorInfo, Option(v), Option(s))
+        }
         case buffer: ByteBuffer => {
+          val shape = inputShape.map(x => x.toArray).getOrElse(expectedShape)
+          val convertedShape = if (isDynamicShape(expectedShape)) shape else expectedShape
+
           tensorInfo.`type` match {
             case FLOAT   => {
-              OnnxTensor.createTensor(env, buffer.asFloatBuffer(), expectedShape)
+              OnnxTensor.createTensor(env, buffer.asFloatBuffer(), convertedShape)
             }
             case DOUBLE  => {
-              OnnxTensor.createTensor(env, buffer.asDoubleBuffer(), expectedShape)
+              OnnxTensor.createTensor(env, buffer.asDoubleBuffer(), convertedShape)
             }
             case INT8    => {
-              OnnxTensor.createTensor(env, buffer, expectedShape)
+              OnnxTensor.createTensor(env, buffer, convertedShape)
             }
             case INT16   => {
-              OnnxTensor.createTensor(env, buffer.asShortBuffer(), expectedShape)
+              OnnxTensor.createTensor(env, buffer.asShortBuffer(), convertedShape)
             }
             case INT32   => {
-              OnnxTensor.createTensor(env, buffer.asIntBuffer(), expectedShape)
+              OnnxTensor.createTensor(env, buffer.asIntBuffer(), convertedShape)
             }
             case INT64   => {
-              OnnxTensor.createTensor(env, buffer.asLongBuffer(), expectedShape)
+              OnnxTensor.createTensor(env, buffer.asLongBuffer(), convertedShape)
             }
             case BOOL    => {
-              OnnxTensor.createTensor(env, buffer, expectedShape)
+              OnnxTensor.createTensor(env, buffer, convertedShape)
             }
             case STRING  => {
               ???
@@ -198,45 +204,49 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
           }
         }
         case _                  => {
-          val shape = shapeOfValue(value)
+          val shape = inputShape.map(x => x.toArray).getOrElse(shapeOfValue(value))
           val count = elementCount(shape)
-          if (count != elementCount(expectedShape)) {
+
+          // The expected shape could contain dynamic axes that take -1
+          val expectedCount = elementCount(expectedShape)
+          if (count % expectedCount != 0) {
             throw ShapeMismatchException(shape, expectedShape)
           }
 
+          val convertedShape = if (isDynamicShape(expectedShape)) shape else expectedShape
           val intCount = count.toInt
           tensorInfo.`type` match {
             case FLOAT   => {
               val data = copyToBuffer[Float](intCount, value)
-              OnnxTensor.createTensor(env, FloatBuffer.wrap(data), expectedShape)
+              OnnxTensor.createTensor(env, FloatBuffer.wrap(data), convertedShape)
             }
             case DOUBLE  => {
               val data = copyToBuffer[Double](intCount, value)
-              OnnxTensor.createTensor(env, DoubleBuffer.wrap(data), expectedShape)
+              OnnxTensor.createTensor(env, DoubleBuffer.wrap(data), convertedShape)
             }
             case INT8    => {
               val data = copyToBuffer[Byte](intCount, value)
-              OnnxTensor.createTensor(env, ByteBuffer.wrap(data), expectedShape)
+              OnnxTensor.createTensor(env, ByteBuffer.wrap(data), convertedShape)
             }
             case INT16   => {
               val data = copyToBuffer[Short](intCount, value)
-              OnnxTensor.createTensor(env, ShortBuffer.wrap(data), expectedShape)
+              OnnxTensor.createTensor(env, ShortBuffer.wrap(data), convertedShape)
             }
             case INT32   => {
               val data = copyToBuffer[Int](intCount, value)
-              OnnxTensor.createTensor(env, IntBuffer.wrap(data), expectedShape)
+              OnnxTensor.createTensor(env, IntBuffer.wrap(data), convertedShape)
             }
             case INT64   => {
               val data = copyToBuffer[Long](intCount, value)
-              OnnxTensor.createTensor(env, LongBuffer.wrap(data), expectedShape)
+              OnnxTensor.createTensor(env, LongBuffer.wrap(data), convertedShape)
             }
             case BOOL    => {
               val data = copyToBuffer[Boolean](intCount, value)
-              OnnxTensor.createTensor(env, OrtUtil.reshape(data, expectedShape))
+              OnnxTensor.createTensor(env, OrtUtil.reshape(data, convertedShape))
             }
             case STRING  => {
               val data = copyToBuffer[String](intCount, value)
-              OnnxTensor.createTensor(env, data, expectedShape)
+              OnnxTensor.createTensor(env, data, convertedShape)
             }
             case UNKNOWN => {
               throw UnknownDataTypeException(name)

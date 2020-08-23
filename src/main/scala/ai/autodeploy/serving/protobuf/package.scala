@@ -208,21 +208,21 @@ package object protobuf {
     if (!v.rawData.isEmpty) {
       // When this raw_data field is used to store tensor value, elements MUST
       // be stored in as fixed-width, little-endian order.
-      v.rawData.asReadOnlyByteBuffer().order(ByteOrder.LITTLE_ENDIAN)
+      (v.rawData.asReadOnlyByteBuffer().order(ByteOrder.LITTLE_ENDIAN), v.dims)
     } else {
       v.dataType match {
         case FLOAT.index | COMPLEX64.index                                                                    =>
-          v.floatData
+          (v.floatData, v.dims)
         case INT32.index | INT16.index | INT8.index | UINT16.index | UINT8.index | BOOL.index | FLOAT16.index =>
-          v.int32Data
+          (v.int32Data, v.dims)
         case STRING.index                                                                                     =>
-          v.stringData
+          (v.stringData, v.dims)
         case INT64.index                                                                                      =>
-          v.int64Data
+          (v.int64Data, v.dims)
         case DOUBLE.index | COMPLEX128.index                                                                  =>
-          v.doubleData
+          (v.doubleData, v.dims)
         case UINT32.index | UINT64.index                                                                      =>
-          v.uint64Data
+          (v.uint64Data, v.dims)
         case _                                                                                                =>
           null
       }

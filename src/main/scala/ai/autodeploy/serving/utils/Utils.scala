@@ -151,7 +151,8 @@ object Utils {
   }
 
   def elementCount(shape: Array[Long]): Long = {
-    shape.foldLeft(1L)((x, y) => x * y)
+    // filter the dynamic axes that take -1
+    shape.filter(x => x != -1).foldLeft(1L)((x, y) => x * y)
   }
 
   def shapeOfValue(value: Any): Array[Long] = {
@@ -159,6 +160,8 @@ object Utils {
     dimensionOfValue(value, result)
     result.toArray
   }
+
+  def isDynamicShape(shape: Array[Long]): Boolean = shape.contains(-1L)
 
   @tailrec
   def dimensionOfValue(value: Any, result: ArrayBuffer[Long]): Unit = value match {

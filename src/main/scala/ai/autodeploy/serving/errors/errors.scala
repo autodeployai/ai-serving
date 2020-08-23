@@ -16,6 +16,8 @@
 
 package ai.autodeploy.serving.errors
 
+import java.util.Arrays
+
 class BaseException(val message: String) extends Exception(message)
 
 case class InvalidModelException(modelType: String, reason: String) extends
@@ -28,7 +30,7 @@ case class ModelTypeNotSupportedException(modelType: Option[String]) extends
   BaseException(modelType.map(x => s"Model type '${x}' not supported") getOrElse s"Unknown model type")
 
 case class ShapeMismatchException(actual: Array[Long], expected: Array[Long]) extends
-  BaseException(s"Shape mismatch: ${expected} expected but ${actual} got")
+  BaseException(s"Shape mismatch: ${Arrays.toString(expected)} expected but ${Arrays.toString(actual)} got")
 
 case class MissingValueException(name: String, `type`: String, shape: Array[Long]) extends
   BaseException(s"Missing value for '${name}' in the input request")
