@@ -1,6 +1,6 @@
 # AI-Serving
 
-Serving AI/ML models in the open standard formats [PMML](http://dmg.org/pmml/v4-4/GeneralStructure.html) and [ONNX](https://onnx.ai/) with both HTTP and gRPC endpoints.
+Serving AI/ML models in the open standard formats [PMML](http://dmg.org/pmml/v4-4/GeneralStructure.html) and [ONNX](https://onnx.ai/) with both HTTP (REST API) and gRPC endpoints.
 
 ## Table of Contents
 
