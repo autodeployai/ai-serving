@@ -22,15 +22,42 @@ import ai.autodeploy.serving.errors.UnknownContentTypeException
 import ai.autodeploy.serving.model.{JsonSupport, PredictRequest}
 import ai.autodeploy.serving.protobuf.{fromPb, toPb, PredictRequest => PbPredictRequest}
 import ai.autodeploy.serving.utils.Utils
-import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpResponse, StatusCodes}
+import akka.event.Logging.LogLevel
+import akka.event.{Logging, LoggingAdapter}
+import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpRequest, HttpResponse, StatusCodes}
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.server.Route
+import akka.http.scaladsl.server.RouteResult.{Complete, Rejected}
+import akka.http.scaladsl.server.directives.{DebuggingDirectives, LogEntry, LoggingMagnet}
+import akka.http.scaladsl.server.{Route, RouteResult}
 import akka.stream.scaladsl.FileIO
 import akka.util.ByteString
 
 import scala.concurrent.{ExecutionContext, Future}
 
 trait Endpoints extends JsonSupport {
+
+  def akkaResponseTimeLoggingFunction(loggingAdapter: LoggingAdapter,
+                                      requestTimestamp: Long,
+                                      level: LogLevel = Logging.InfoLevel)(req: HttpRequest)(res: RouteResult): Unit = {
+    val entry = res match {
+      case Complete(resp) =>
+        val responseTimestamp: Long = System.nanoTime
+        val elapsedTime: Long = (responseTimestamp - requestTimestamp) / 1000000
+        val loggingString = s"""Logged request - "${req.method.value} ${req.uri.path} ${req.protocol.value}" ${resp.status} $elapsedTime(ms)"""
+        LogEntry(loggingString, level)
+      case Rejected(reason) =>
+        LogEntry(s"Rejected reason: ${reason.mkString(", ")}", level)
+    }
+    entry.logTo(loggingAdapter)
+  }
+
+  def printResponseTime(log: LoggingAdapter) = {
+    val requestTimestamp = System.nanoTime
+    akkaResponseTimeLoggingFunction(log, requestTimestamp)_
+  }
+
+  val logResponseTime = DebuggingDirectives.logRequestResult(LoggingMagnet(printResponseTime))
+
 
   def up(): Route = path("up") {
     complete(HttpResponse(
@@ -39,98 +66,106 @@ trait Endpoints extends JsonSupport {
   }
 
   def validate()(implicit ec: ExecutionContext): Route = path("v1" / "validate") {
-    handleExceptions(defaultExceptionHandler) {
-      handleRejections(defaultRejectionHandler) {
-        extractRequestContext { ctx =>
-          import ctx.materializer
-          requestEntityPresent {
-            withoutSizeLimit {
-              extractRequestEntity { entity =>
-                val dest = Utils.tempPath()
-                val uploadedFut = entity.dataBytes.runWith(FileIO.toPath(dest))
-                val validatedFut = uploadedFut.flatMap(_ => {
-                  val modelType = Utils.inferModelType(dest, contentType = Some(entity.contentType))
-                  ModelManager.validate(dest, modelType)
-                }).transform { case result =>
-                  Utils.safeDelete(dest)
-                  result
-                }
+    logResponseTime {
+        handleExceptions(defaultExceptionHandler) {
+          handleRejections(defaultRejectionHandler) {
+            extractRequestContext { ctx =>
+              import ctx.materializer
+              requestEntityPresent {
+                withoutSizeLimit {
+                  extractRequestEntity { entity =>
+                    val dest = Utils.tempPath()
+                    val uploadedFut = entity.dataBytes.runWith(FileIO.toPath(dest))
+                    val validatedFut = uploadedFut.flatMap(_ => {
+                      val modelType = Utils.inferModelType(dest, contentType = Some(entity.contentType))
+                      ModelManager.validate(dest, modelType)
+                    }).transform { case result =>
+                      Utils.safeDelete(dest)
+                      result
+                    }
 
-                onSuccess(validatedFut) { result =>
-                  complete(result)
+                    onSuccess(validatedFut) { result =>
+                      complete(result)
+                    }
+                  }
                 }
               }
             }
           }
-        }
       }
     }
   }
 
   def modelsV1()(implicit ec: ExecutionContext): Route = path("v1" / "models") {
-    handleExceptions(defaultExceptionHandler) {
-      get {
-        onSuccess(ModelManager.getMetadataAll()) { result =>
-          complete(result)
+    logResponseTime {
+      handleExceptions(defaultExceptionHandler) {
+        get {
+          onSuccess(ModelManager.getMetadataAll()) { result =>
+            complete(result)
+          }
         }
       }
     }
   }
 
   def modelV1()(implicit ec: ExecutionContext): Route = path("v1" / "models" / Segment) { modelName =>
-    handleExceptions(defaultExceptionHandler) {
-      handleRejections(defaultRejectionHandler) {
-        put {
-          extractRequestContext { ctx =>
-            import ctx.materializer
-            requestEntityPresent {
-              withoutSizeLimit {
-                extractRequestEntity { entity =>
-                  val dest = Utils.tempPath()
-                  val uploadedFut = entity.dataBytes.runWith(FileIO.toPath(dest))
-                  val deployedFut = uploadedFut.flatMap(_ => {
-                    val modelType = Utils.inferModelType(dest, contentType = Some(entity.contentType))
-                    ModelManager.deploy(dest, modelType, modelName)
-                  }).transform { case result =>
-                    Utils.safeDelete(dest)
-                    result
-                  }
+    logResponseTime {
+      handleExceptions(defaultExceptionHandler) {
+        handleRejections(defaultRejectionHandler) {
+          put {
+            extractRequestContext { ctx =>
+              import ctx.materializer
+              requestEntityPresent {
+                withoutSizeLimit {
+                  extractRequestEntity { entity =>
+                    val dest = Utils.tempPath()
+                    val uploadedFut = entity.dataBytes.runWith(FileIO.toPath(dest))
+                    val deployedFut = uploadedFut.flatMap(_ => {
+                      val modelType = Utils.inferModelType(dest, contentType = Some(entity.contentType))
+                      ModelManager.deploy(dest, modelType, modelName)
+                    }).transform { case result =>
+                      Utils.safeDelete(dest)
+                      result
+                    }
 
-                  onSuccess(deployedFut) { result =>
-                    complete(StatusCodes.Created, result)
+                    onSuccess(deployedFut) { result =>
+                      complete(StatusCodes.Created, result)
+                    }
                   }
                 }
               }
             }
-          }
-        } ~
-          post {
-            predict(modelName)
           } ~
-          get {
-            onSuccess(ModelManager.getMetadata(modelName)) { result =>
-              complete(result)
+            post {
+              predict(modelName)
+            } ~
+            get {
+              onSuccess(ModelManager.getMetadata(modelName)) { result =>
+                complete(result)
+              }
+            } ~
+            delete {
+              onSuccess(ModelManager.undeploy(modelName)) { _ =>
+                complete(StatusCodes.NoContent)
+              }
             }
-          } ~
-          delete {
-            onSuccess(ModelManager.undeploy(modelName)) { _ =>
-              complete(StatusCodes.NoContent)
-            }
-          }
+        }
       }
     }
   }
 
   def modelVersionV1()(implicit ec: ExecutionContext): Route = path("v1" / "models" / Segment / "versions" / IntNumber) {
     (modelName, modelVersion) =>
-      handleExceptions(defaultExceptionHandler) {
-        handleRejections(defaultRejectionHandler) {
-          get {
-            onSuccess(ModelManager.getMetadata(modelName, Some(modelVersion))) { result =>
-              complete(result)
+      logResponseTime {
+        handleExceptions(defaultExceptionHandler) {
+          handleRejections(defaultRejectionHandler) {
+            get {
+              onSuccess(ModelManager.getMetadata(modelName, Some(modelVersion))) { result =>
+                complete(result)
+              }
+            } ~ post {
+              predict(modelName, Some(modelVersion))
             }
-          } ~ post {
-            predict(modelName, Some(modelVersion))
           }
         }
       }
@@ -181,3 +216,4 @@ trait Endpoints extends JsonSupport {
     }
   }
 }
+
