@@ -1,6 +1,6 @@
 name := "ai-serving"
 
-version := "0.9.3"
+version := "0.9.4"
 
 organization := "ai.autodeploy"
 
@@ -22,8 +22,8 @@ scalacOptions in(Compile, doc) := Seq("-no-link-warnings")
 
 val akkaVersion = "2.6.4"
 val akkaHttpVersion = "10.1.11"
-val pmml4sVersion = "0.9.9"
-val onnxruntimeVersion = "1.6.0"
+val pmml4sVersion = "0.9.10"
+val onnxruntimeVersion = "1.7.0"
 
 libraryDependencies ++= {
   (sys.props.getOrElse("gpu", "false") match {
