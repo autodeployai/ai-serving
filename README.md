@@ -1,6 +1,6 @@
 # AI-Serving
 
-Serving AI/ML models in the open standard formats [PMML](http://dmg.org/pmml/v4-4/GeneralStructure.html) and [ONNX](https://onnx.ai/) with both HTTP (REST API) and gRPC endpoints.
+Serving AI/ML models in the open standard formats [PMML](http://dmg.org/pmml/v4-4-1/GeneralStructure.html) and [ONNX](https://onnx.ai/) with both HTTP (REST API) and gRPC endpoints.
 
 ## Table of Contents
 
@@ -112,7 +112,7 @@ AI-Serving is designed to be persistent or recoverable, so it needs a place to s
 
 ## PMML
 
-Integrates [PMML4S](https://github.com/autodeployai/pmml4s) to score PMML models. PMML4S is a lightweight, clean and efficient implementation based on the PMML specification from 2.0 through to the latest 4.4. 
+Integrates [PMML4S](https://github.com/autodeployai/pmml4s) to score PMML models. PMML4S is a lightweight, clean and efficient implementation based on the [PMML](http://dmg.org/) specification from 2.0 through to the latest 4.4.1. 
 
 PMML4S is written in pure Scala that running in JVM, AI-Serving needs no special configurations to support PMML models.
 
