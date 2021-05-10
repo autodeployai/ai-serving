@@ -3,34 +3,50 @@
 # Licensed under the Apache License, Version 2.0 (the "License").
 # --------------------------------------------------------------
 
-FROM ubuntu:16.04
+FROM ubuntu:18.04
 MAINTAINER AutoDeployAI "autodeploy.ai@gmail.com"
 
-ARG AI_SERVING_REPO=https://github.com/autodeployai/ai-serving
-ARG AI_SERVING_BRANCH=master
+ADD . /code
+
+ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update &&\
-  apt-get install -y sudo git bash &&\
-  rm -rf /var/lib/apt/lists/*
+  apt-get install -y --no-install-recommends \
+  wget \
+  zip \
+  unzip \
+  ca-certificates \
+  build-essential \
+  curl \
+  libcurl4-openssl-dev \
+  libssl-dev \
+  libgomp1 \
+  openjdk-11-jdk \
+  ca-certificates-java
 
-WORKDIR /code
-ENV \
-  LANG=C.UTF-8 \
-  JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 \
-  PATH=/code/sbt/bin:${PATH}
+RUN  wget -q -O /tmp/sbt-1.3.6.tgz https://github.com/sbt/sbt/releases/download/v1.3.6/sbt-1.3.6.tgz &&\
+  tar -zxf /tmp/sbt-1.3.6.tgz --strip=1 -C /usr
 
-# Prepare ai-serving repository and build it with onnxruntime default CPU binaries harvested from maven central 
-RUN git clone --single-branch --branch ${AI_SERVING_BRANCH} --recursive ${AI_SERVING_REPO} ai-serving &&\
-  /bin/sh ai-serving/dockerfiles/scripts/install_common_deps.sh &&\
-  cd ai-serving &&\
-  sbt assembly &&\
-  mkdir -p /ai-serving &&\
-  cp target/scala-2.13/*.jar /ai-serving &&\
-  cd /ai-serving &&\
-  ln -s ai-serving-assembly-*.jar ai-serving-assembly.jar &&\
-  rm -rf /code/* &&\
-  rm -rf ~/.cache && rm -rf ~/.ivy2 && rm -rf ~/.sbt && rm -rf /tmp/*
+# Harvest both PMML4S and ONNXRuntime(CPU) from maven central
+RUN cd /code &&\
+  sbt assembly
+
+
+FROM ubuntu:18.04
 
 WORKDIR /ai-serving
+
+ENV \
+  LANG=C.UTF-8 \
+  JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+
+RUN apt-get update &&\
+  apt-get install -y libgomp1 openjdk-11-jre ca-certificates-java &&\
+  rm -rf /var/lib/apt/lists/*
+
+COPY --from=0 /code/target/scala-2.13/*.jar .
+
+RUN ln -s ai-serving-assembly-*.jar ai-serving-assembly.jar
+
 ENTRYPOINT exec java $JAVA_OPTS -jar ai-serving-assembly.jar
 
