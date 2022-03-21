@@ -1,6 +1,6 @@
 name := "ai-serving"
 
-version := "0.9.4"
+version := "0.9.5"
 
 organization := "ai.autodeploy"
 
@@ -14,7 +14,7 @@ startYear := Some(2019)
 
 licenses := Seq("Apache 2" -> new URL("http://www.apache.org/licenses/LICENSE-2.0.txt"))
 
-scalaVersion := "2.13.4"
+scalaVersion := "2.13.8"
 
 scalacOptions := Seq("-feature", "-language:_", "-unchecked", "-deprecation", "-encoding", "utf8")
 
@@ -22,8 +22,8 @@ scalacOptions in(Compile, doc) := Seq("-no-link-warnings")
 
 val akkaVersion = "2.6.4"
 val akkaHttpVersion = "10.1.11"
-val pmml4sVersion = "0.9.10"
-val onnxruntimeVersion = "1.6.0"
+val pmml4sVersion = "0.9.15"
+val onnxruntimeVersion = "1.10.0"
 
 libraryDependencies ++= {
   (sys.props.getOrElse("gpu", "false") match {
