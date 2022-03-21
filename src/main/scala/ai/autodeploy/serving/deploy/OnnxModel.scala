@@ -161,16 +161,16 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
   }
 
 
-  private def convertToTensor(name: String, tensorInfo: TensorInfo, inputValue: Option[Any], inputShape: Option[Seq[Long]] = None): OnnxTensor = inputValue match {
+  private def convertToTensor(name: String, tensorInfo: TensorInfo, inputValue: Option[Any], inputShape: Option[Seq[_]] = None): OnnxTensor = inputValue match {
     case Some(value) => {
       import OnnxJavaType._
       val expectedShape = tensorInfo.getShape
       value match {
-        case (v, s: Seq[Long]) => {
+        case (v, s: Seq[_]) => {
           convertToTensor(name, tensorInfo, Option(v), Option(s))
         }
         case buffer: ByteBuffer => {
-          val shape = inputShape.map(x => x.toArray).getOrElse(expectedShape)
+          val shape = inputShape.map(x => convertShape(x)).getOrElse(expectedShape)
           val convertedShape = if (isDynamicShape(expectedShape)) shape else expectedShape
 
           tensorInfo.`type` match {
@@ -193,10 +193,13 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
               OnnxTensor.createTensor(env, buffer.asLongBuffer(), convertedShape)
             }
             case BOOL    => {
-              OnnxTensor.createTensor(env, buffer, convertedShape)
+              ???
             }
             case STRING  => {
               ???
+            }
+            case UINT8   => {
+              OnnxTensor.createTensor(env, buffer, convertedShape, OnnxJavaType.UINT8)
             }
             case UNKNOWN => {
               throw UnknownDataTypeException(name)
@@ -204,7 +207,7 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
           }
         }
         case _                  => {
-          val shape = inputShape.map(x => x.toArray).getOrElse(shapeOfValue(value))
+          val shape = inputShape.map(x => convertShape(x)).getOrElse(shapeOfValue(value))
           val count = elementCount(shape)
 
           // The expected shape could contain dynamic axes that take -1
@@ -248,6 +251,10 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
               val data = copyToBuffer[String](intCount, value)
               OnnxTensor.createTensor(env, data, convertedShape)
             }
+            case UINT8   => {
+              val data = copyToBuffer[Byte](intCount, value)
+              OnnxTensor.createTensor(env, ByteBuffer.wrap(data), convertedShape, OnnxJavaType.UINT8)
+            }
             case UNKNOWN => {
               throw UnknownDataTypeException(name)
             }
@@ -289,6 +296,18 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
       data.update(pos, converter(value))
       pos + 1
     }
+  }
+
+  private def convertShape(shape: Seq[_]): Array[Long] = {
+    val result = Array.ofDim[Long](shape.length)
+    shape.zipWithIndex.foreach(x =>result(x._2) = {
+      x._1 match {
+        case element: Long    => element
+        case element: Number  => element.longValue()
+        case _                => x.toString().toLong
+      }
+    })
+    result
   }
 }
 
