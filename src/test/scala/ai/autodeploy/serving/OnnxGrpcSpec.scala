@@ -35,17 +35,17 @@ class OnnxGrpcSpec extends BaseGrpcSpec {
       val input = getResource("mnist.onnx")
       val output = getResource("mnist.json")
 
-      val response = blockingStub.validate(ValidateRequest(ByteString.copyFrom(Files.readAllBytes(input)), "ONNX"))
+      val response = blockingStub().validate(ValidateRequest(ByteString.copyFrom(Files.readAllBytes(input)), "ONNX"))
       response shouldBe loadJson[ModelInfo](output).toPb
     }
 
     "return a prediction response for calling 'predict' using payload in records: list like [{column -> value}, … , {column -> value}]" in {
       val name = "an-onnx-model"
       val input = getResource("mnist.onnx")
-      val deployResponse = blockingStub.deploy(DeployRequest(name, ByteString.copyFrom(Files.readAllBytes(input)), "ONNX"))
+      val deployResponse = blockingStub().deploy(DeployRequest(name, ByteString.copyFrom(Files.readAllBytes(input)), "ONNX"))
 
       val tensor0 = onnx.TensorProto.parseFrom(Files.readAllBytes(getResource("mnist_input_0.pb")))
-      val predictResponse = blockingStub.predict(PredictRequest(deployResponse.modelSpec).withX(
+      val predictResponse = blockingStub().predict(PredictRequest(deployResponse.modelSpec).withX(
         RecordSpec(records = List(Record(Map("Input3" -> Value(Kind.TensorValue(tensor0))))))))
 
       val result = predictResponse.result.get.records.head.fields.values.head.getTensorValue.floatData
@@ -55,19 +55,19 @@ class OnnxGrpcSpec extends BaseGrpcSpec {
         x._1 shouldEqual x._2
       }
 
-      blockingStub.undeploy(UndeployRequest(deployResponse.modelSpec))
+      blockingStub().undeploy(UndeployRequest(deployResponse.modelSpec))
     }
 
     "return a prediction response for calling 'predict' using payload in split: dict like {‘columns’ -> [columns], ‘data’ -> [values]}" in {
       val name = "an-onnx-model"
       val input = getResource("mnist.onnx")
-      val deployResponse = blockingStub.deploy(DeployRequest(name, ByteString.copyFrom(Files.readAllBytes(input)), "ONNX"))
+      val deployResponse = blockingStub().deploy(DeployRequest(name, ByteString.copyFrom(Files.readAllBytes(input)), "ONNX"))
 
       val tensor0 = onnx.TensorProto.parseFrom(Files.readAllBytes(getResource("mnist_input_0.pb")))
       val tensor1 = onnx.TensorProto.parseFrom(Files.readAllBytes(getResource("mnist_input_1.pb")))
       val tensor2 = onnx.TensorProto.parseFrom(Files.readAllBytes(getResource("mnist_input_2.pb")))
 
-      val predictResponse = blockingStub.predict(PredictRequest(deployResponse.modelSpec).withX(
+      val predictResponse = blockingStub().predict(PredictRequest(deployResponse.modelSpec).withX(
         RecordSpec(
           columns = Seq("Input3"),
           data = Seq(ListValue(Seq(Value(Kind.TensorValue(tensor0)))),
@@ -84,7 +84,7 @@ class OnnxGrpcSpec extends BaseGrpcSpec {
         }
       }
 
-      blockingStub.undeploy(UndeployRequest(deployResponse.modelSpec))
+      blockingStub().undeploy(UndeployRequest(deployResponse.modelSpec))
     }
 
   }

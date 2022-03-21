@@ -33,16 +33,16 @@ class PmmlGrpcSpec extends BaseGrpcSpec {
       val input = getResource("single_iris_dectree.xml")
       val output = getResource("single_iris_dectree.json")
 
-      val response = blockingStub.validate(ValidateRequest(ByteString.copyFrom(Files.readAllBytes(input)), "PMML"))
+      val response = blockingStub().validate(ValidateRequest(ByteString.copyFrom(Files.readAllBytes(input)), "PMML"))
       response shouldBe loadJson[ModelInfo](output).toPb
     }
 
     "return a prediction response for calling 'predict' using payload in records: list like [{column -> value}, … , {column -> value}]" in {
       val name = "a-pmml-model"
       val input = getResource("single_iris_dectree.xml")
-      val deployResponse = blockingStub.deploy(DeployRequest(name, ByteString.copyFrom(Files.readAllBytes(input))))
+      val deployResponse = blockingStub().deploy(DeployRequest(name, ByteString.copyFrom(Files.readAllBytes(input))))
 
-      val predictResponse = blockingStub.predict(PredictRequest(modelSpec = deployResponse.modelSpec).withX(
+      val predictResponse = blockingStub().predict(PredictRequest(modelSpec = deployResponse.modelSpec).withX(
         RecordSpec(Seq(Record(Map("sepal_length" -> Value(Kind.NumberValue(5.1)),
           "sepal_width" -> Value(Kind.NumberValue(3.5)),
           "petal_length" -> Value(Kind.NumberValue(1.4)),
@@ -57,15 +57,15 @@ class PmmlGrpcSpec extends BaseGrpcSpec {
           "probability" -> Value(Kind.NumberValue(1.0))))))
       )
 
-      blockingStub.undeploy(UndeployRequest(deployResponse.modelSpec))
+      blockingStub().undeploy(UndeployRequest(deployResponse.modelSpec))
     }
 
     "return a prediction response for calling 'predict' using payload in split: dict like {‘columns’ -> [columns], ‘data’ -> [values]}" in {
       val name = "a-pmml-model"
       val input = getResource("single_iris_dectree.xml")
-      val deployResponse = blockingStub.deploy(DeployRequest(name, ByteString.copyFrom(Files.readAllBytes(input))))
+      val deployResponse = blockingStub().deploy(DeployRequest(name, ByteString.copyFrom(Files.readAllBytes(input))))
 
-      val predictResponse = blockingStub.predict(PredictRequest(modelSpec = Some(ModelSpec(name))).withX(
+      val predictResponse = blockingStub().predict(PredictRequest(modelSpec = Some(ModelSpec(name))).withX(
         RecordSpec(
           columns = Seq("sepal_length", "sepal_width", "petal_length", "petal_width"),
           data = Seq(ListValue(Seq(Value(Kind.NumberValue(5.1)), Value(Kind.NumberValue(3.5)),
@@ -85,49 +85,49 @@ class PmmlGrpcSpec extends BaseGrpcSpec {
         )
       )
 
-      blockingStub.undeploy(UndeployRequest(deployResponse.modelSpec))
+      blockingStub().undeploy(UndeployRequest(deployResponse.modelSpec))
     }
 
     "return a model metadata response for calling 'loadModelMetadataWithVersion' with the specified model and version" in {
       val name = "a-pmml-model"
       val input = getResource("single_iris_dectree.xml")
-      val deployResponse = blockingStub.deploy(DeployRequest(name, ByteString.copyFrom(Files.readAllBytes(input))))
+      val deployResponse = blockingStub().deploy(DeployRequest(name, ByteString.copyFrom(Files.readAllBytes(input))))
 
-      val metadataResponse = blockingStub.getModelMetadata(GetModelMetadataRequest(deployResponse.modelSpec))
+      val metadataResponse = blockingStub().getModelMetadata(GetModelMetadataRequest(deployResponse.modelSpec))
       metadataResponse.modelSpec shouldEqual deployResponse.modelSpec
       metadataResponse.metadata should have size 1
       metadataResponse.metadata.head.versions should have size 1
 
-      blockingStub.undeploy(UndeployRequest(deployResponse.modelSpec))
+      blockingStub().undeploy(UndeployRequest(deployResponse.modelSpec))
     }
 
     "return a model metadata response for calling 'loadModelMetadataWithVersion' with the specified model" in {
       val name = "a-pmml-model"
       val input = getResource("single_iris_dectree.xml")
-      blockingStub.deploy(DeployRequest(name, ByteString.copyFrom(Files.readAllBytes(input))))
-      blockingStub.deploy(DeployRequest(name, ByteString.copyFrom(Files.readAllBytes(input))))
+      blockingStub().deploy(DeployRequest(name, ByteString.copyFrom(Files.readAllBytes(input))))
+      blockingStub().deploy(DeployRequest(name, ByteString.copyFrom(Files.readAllBytes(input))))
 
       val modelSpec = Some(ModelSpec(name))
-      val metadataResponse = blockingStub.getModelMetadata(GetModelMetadataRequest(modelSpec))
+      val metadataResponse = blockingStub().getModelMetadata(GetModelMetadataRequest(modelSpec))
       metadataResponse.modelSpec shouldEqual modelSpec
       metadataResponse.metadata should have size 1
       metadataResponse.metadata.head.versions should have size 2
 
-      blockingStub.undeploy(UndeployRequest(modelSpec))
+      blockingStub().undeploy(UndeployRequest(modelSpec))
     }
 
     "return all models metadata response for calling 'loadModelMetadataWithVersion' without a model" in {
       val input = getResource("single_iris_dectree.xml")
-      blockingStub.deploy(DeployRequest("a-pmml-model", ByteString.copyFrom(Files.readAllBytes(input))))
-      blockingStub.deploy(DeployRequest("b-pmml-model", ByteString.copyFrom(Files.readAllBytes(input))))
+      blockingStub().deploy(DeployRequest("a-pmml-model", ByteString.copyFrom(Files.readAllBytes(input))))
+      blockingStub().deploy(DeployRequest("b-pmml-model", ByteString.copyFrom(Files.readAllBytes(input))))
 
-      val metadataResponse = blockingStub.getModelMetadata(GetModelMetadataRequest(None))
+      val metadataResponse = blockingStub().getModelMetadata(GetModelMetadataRequest(None))
       metadataResponse.modelSpec shouldEqual None
       metadataResponse.metadata should have size 2
       metadataResponse.metadata.head.versions should have size 1
 
-      blockingStub.undeploy(UndeployRequest(Some(ModelSpec("a-pmml-model"))))
-      blockingStub.undeploy(UndeployRequest(Some(ModelSpec("b-pmml-model"))))
+      blockingStub().undeploy(UndeployRequest(Some(ModelSpec("a-pmml-model"))))
+      blockingStub().undeploy(UndeployRequest(Some(ModelSpec("b-pmml-model"))))
     }
   }
 

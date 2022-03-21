@@ -62,20 +62,20 @@ trait PredictModel extends Predictable with AutoCloseable {
   def redundancies(): Seq[Field] = Seq.empty
 
   def toModelInfo(): ModelInfo = ModelInfo(
-    `type` = `type`,
-    serialization = serialization,
-    runtime = runtime,
-    predictors = toOption(predictors),
-    targets = toOption(targets),
-    outputs = toOption(outputs),
-    redundancies = toOption(redundancies),
-    algorithm = algorithm,
-    functionName = functionName,
-    description = description,
-    formatVersion = formatVersion,
-    app = app,
-    appVersion = appVersion,
-    copyright = copyright
+    `type` = `type`(),
+    serialization = serialization(),
+    runtime = runtime(),
+    predictors = toOption(predictors()),
+    targets = toOption(targets()),
+    outputs = toOption(outputs()),
+    redundancies = toOption(redundancies()),
+    algorithm = algorithm(),
+    functionName = functionName(),
+    description = description(),
+    formatVersion = formatVersion(),
+    app = app(),
+    appVersion = appVersion(),
+    copyright = copyright()
   )
 }
 
