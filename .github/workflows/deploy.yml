@@ -1,0 +1,19 @@
+name: Deploy docker version
+
+on:
+  workflow_dispatch:
+   inputs:
+    tag:
+      description: 'Image tag'
+      required: true
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Build the Docker image
+      run: docker build . --file dockerfiles/Dockerfile --tag ml-model-repository:${{inputs.tag}}
