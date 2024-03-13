@@ -6,6 +6,12 @@ on:
     tag:
       description: 'Image tag'
       required: true
+
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  BASE_ECR_URL: 535528419544.dkr.ecr.us-east-2.amazonaws.com
+
 jobs:
 
   build:
@@ -16,4 +22,19 @@ jobs:
     - uses: actions/checkout@v3
 
     - name: Build the Docker image
-      run: docker build . --file dockerfiles/Dockerfile --tag ml-model-repository:${{inputs.tag}}
+      run: docker build . --file dockerfiles/Dockerfile --tag ${{env.BASE_ECR_URL}}/ai-serving:${{inputs.tag}} --tag ${{env.BASE_ECR_URL}}/ai-serving:latest
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-2
+
+    - name: Login to Amazon ECR
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Push Images
+      run: |
+        docker push ${{env.BASE_ECR_URL}}/ai-serving:latest
+        docker push ${{env.BASE_ECR_URL}}/ai-serving:${{inputs.tag}}
