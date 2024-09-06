@@ -7,7 +7,7 @@
         </encoder>
     </appender>
 
-    <logger name="ai.autodeploy.serving" level="${LOG_LEVEL:-INFO}" additivity="false">
+    <logger name="com.autodeployai.serving" level="${LOG_LEVEL:-INFO}" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 

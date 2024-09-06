@@ -3,7 +3,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License").
 # --------------------------------------------------------------
 
-FROM ubuntu:18.04
+FROM ubuntu:22.04
 MAINTAINER AutoDeployAI "autodeploy.ai@gmail.com"
 
 ADD . /code
@@ -24,15 +24,16 @@ RUN apt-get update &&\
   openjdk-11-jdk \
   ca-certificates-java
 
-RUN  wget -q -O /tmp/sbt-1.3.6.tgz https://github.com/sbt/sbt/releases/download/v1.3.6/sbt-1.3.6.tgz &&\
-  tar -zxf /tmp/sbt-1.3.6.tgz --strip=1 -C /usr
+ARG SBT_VERSION=1.6.2
+RUN  wget -q -O /tmp/sbt-${SBT_VERSION}.tgz https://github.com/sbt/sbt/releases/download/v${SBT_VERSION}/sbt-${SBT_VERSION}.tgz &&\
+  tar -zxf /tmp/sbt-${SBT_VERSION}.tgz --strip=1 -C /usr
 
 # Harvest both PMML4S and ONNXRuntime(CPU) from maven central
 RUN cd /code &&\
   sbt assembly
 
 
-FROM ubuntu:18.04
+FROM ubuntu:22.04
 
 WORKDIR /ai-serving
 
@@ -48,5 +49,5 @@ COPY --from=0 /code/target/scala-2.13/*.jar .
 
 RUN ln -s ai-serving-assembly-*.jar ai-serving-assembly.jar
 
-ENTRYPOINT exec java $JAVA_OPTS -jar ai-serving-assembly.jar
+ENTRYPOINT exec java $JAVA_OPTS --add-exports java.base/jdk.internal.math=ALL-UNNAMED -jar ai-serving-assembly.jar
 

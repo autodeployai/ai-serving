@@ -4,7 +4,7 @@ import "onnx-ml.proto";
 import "google/protobuf/wrappers.proto";
 import "google/protobuf/timestamp.proto";
 
-package ai.autodeploy.serving.protobuf;
+package com.autodeployai.serving.protobuf;
 
 // Provides access to AI models served by AI-Serving.
 service DeploymentService {

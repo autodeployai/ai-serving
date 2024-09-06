@@ -1,10 +1,13 @@
-name := "ai-serving"
+name := (sys.props.getOrElse("gpu", "false") match {
+  case "true" | "1" => "ai-serving-gpu"
+  case _            => "ai-serving"
+})
 
-version := "0.9.5"
+version := "1.0.2"
 
-organization := "ai.autodeploy"
+organization := "com.autodeployai"
 
-organizationHomepage := Some(new URL("https://autodeploy.ai"))
+organizationHomepage := Some(new URL("https://autodeployai.com"))
 
 description := "Serving AI/ML models in the open standard formats PMML and ONNX with both HTTP (REST API) and gRPC endpoints"
 
@@ -14,16 +17,16 @@ startYear := Some(2019)
 
 licenses := Seq("Apache 2" -> new URL("http://www.apache.org/licenses/LICENSE-2.0.txt"))
 
-scalaVersion := "2.13.8"
+scalaVersion := "2.13.13"
 
 scalacOptions := Seq("-feature", "-language:_", "-unchecked", "-deprecation", "-encoding", "utf8")
 
 scalacOptions in(Compile, doc) := Seq("-no-link-warnings")
 
-val akkaVersion = "2.6.4"
-val akkaHttpVersion = "10.1.11"
-val pmml4sVersion = "0.9.15"
-val onnxruntimeVersion = "1.10.0"
+val akkaVersion = "2.7.0"
+val akkaHttpVersion = "10.5.3"
+val pmml4sVersion = "1.0.2"
+val onnxruntimeVersion = "1.18.0"
 
 libraryDependencies ++= {
   (sys.props.getOrElse("gpu", "false") match {
@@ -61,4 +64,5 @@ assemblyMergeStrategy in assembly := {
     oldStrategy(x)
 }
 
-
+Test / fork := true
+javaOptions in Test ++= Seq("--add-exports", "java.base/jdk.internal.math=ALL-UNNAMED")
