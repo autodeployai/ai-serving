@@ -23,8 +23,7 @@ import com.autodeployai.serving.utils.Utils
 import com.google.protobuf.ByteString
 import com.google.protobuf.timestamp.Timestamp
 import io.grpc.{Status, StatusRuntimeException}
-import onnx._
-import onnx.TensorProto.DataType._
+import protobuf.TensorProto.DataType._
 
 import scala.jdk.CollectionConverters._
 

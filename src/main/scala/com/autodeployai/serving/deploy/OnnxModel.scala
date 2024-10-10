@@ -202,6 +202,12 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
             case UINT8   => {
               OnnxTensor.createTensor(env, buffer, convertedShape, OnnxJavaType.UINT8)
             }
+            case FLOAT16  => {
+              ???
+            }
+            case BFLOAT16  => {
+              ???
+            }
             case UNKNOWN => {
               throw UnknownDataTypeException(name)
             }
@@ -255,6 +261,12 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
             case UINT8   => {
               val data = copyToBuffer[Byte](intCount, value)
               OnnxTensor.createTensor(env, ByteBuffer.wrap(data), convertedShape, OnnxJavaType.UINT8)
+            }
+            case FLOAT16  => {
+              ???
+            }
+            case BFLOAT16  => {
+              ???
             }
             case UNKNOWN => {
               throw UnknownDataTypeException(name)
