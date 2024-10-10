@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2024 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,14 +17,14 @@
 package com.autodeployai.serving.protobuf
 
 import io.grpc.{Server, ServerBuilder}
-import org.slf4j.LoggerFactory
+import org.slf4j.{Logger, LoggerFactory}
 
 import scala.concurrent.ExecutionContext
 
 class GrpcServer(executionContext: ExecutionContext, port: Int) {
   self =>
 
-  val log = LoggerFactory.getLogger(this.getClass)
+  val log: Logger = LoggerFactory.getLogger(this.getClass)
 
   private[this] var server: Server = null
 

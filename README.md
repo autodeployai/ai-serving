@@ -37,7 +37,7 @@ Serving AI/ML models in the open standard formats [PMML](http://dmg.org/pmml/v4-
 
 ## Features
 
-AI Serving is a flexible, high-performance inferencing system for machine learning and deep learning models, designed for production environments. AI Serving provides out-of-the-box integration with PMML and ONNX models, but can be easily extended to serve other formats of models. The next candidate format could be [PFA](http://dmg.org/pfa/index.html).
+AI Serving is a flexible, high-performance inferencing system for machine learning and deep learning models, designed for production environments. AI Serving provides out-of-the-box integration with PMML and ONNX models, but can be easily extended to serve other formats of models.
 
 
 ## Prerequisites
@@ -78,7 +78,7 @@ sbt -Dgpu=true 'set test in assembly := {}' clean assembly
 
 An assembly jar will be generated:
 ```bash
-$REPO_ROOT/target/scala-2.13/ai-serving-assembly-<version>.jar
+$REPO_ROOT/target/scala-2.13/ai-serving-assembly-<version>.jar or ai-serving-gpu-assembly-<version>.jar
 ```
 
 #### Start Server
@@ -90,7 +90,7 @@ java -jar ai-serving-assembly-<version>.jar
 
 GPU backend for ONNX models:
 ```bash
-java -Donnxruntime.backend=cuda -jar ai-serving-assembly-<version>.jar
+java -Donnxruntime.backend=cuda -jar ai-serving-gpu-assembly-<version>.jar
 ```
 Several available execution backends: TensorRT, DirectML, Dnnl and so on. See [Advanced ONNX Runtime Configuration](#advanced-onnx-runtime-configuration) for details.
 
@@ -170,18 +170,18 @@ Model with `Content-Type` that tells the server which format to handle:
 If no `Content-Type` specified, the server can probe the content type from the input entity, but it could fail.
 
 #### Response:
-Model metadata includes the model type, predictor list, output list, and so on.
+Model metadata includes the model type, input list, output list, and so on.
 ```
 {
   "type": <model_type>
-  "predictors": [
+  "inputs": [
     {
-      "name": <predictor_name1>,
+      "name": <input_name1>,
       "type": <field_type>,
       ...
     },
     {
-      "name": <predictor_name2>,
+      "name": <input_name2>,
       "type": <field_type>,
       ...
     },
@@ -331,18 +331,18 @@ The request body could have two formats: JSON and binary, the HTTP header `Conte
     "X": {
       "records": [
         {
-          "predictor_name1": <value>|<(nested)list>,
-          "predictor_name2": <value>|<(nested)list>,
+          "input_name1": <value>|<(nested)list>,
+          "input_name2": <value>|<(nested)list>,
           ...
         },
         {
-          "predictor_name1": <value>|<(nested)list>,
-          "predictor_name2": <value>|<(nested)list>,
+          "input_name1": <value>|<(nested)list>,
+          "input_name2": <value>|<(nested)list>,
           ...
         },
         ...
       ],
-      "columns": [ "predictor_name1", "predictor_name2", ... ],
+      "columns": [ "input_name1", "input_name2", ... ],
       "data": [ 
         [ <value>|<(nested)list>, <value>|<(nested)list>, ... ], 
         [ <value>|<(nested)list>, <value>|<(nested)list>, ... ], 
@@ -471,7 +471,7 @@ curl -X PUT --data-binary @single_iris_dectree.xml -H "Content-Type: application
       "type": "string"
     }
   ],
-  "predictors": [
+  "inputs": [
     {
       "name": "sepal_length",
       "optype": "continuous",
@@ -571,7 +571,7 @@ curl -X GET http://localhost:9090/v1/models/iris
           "type": "string"
         }
       ],
-      "predictors": [
+      "inputs": [
         {
           "name": "sepal_length",
           "optype": "continuous",
@@ -669,7 +669,7 @@ curl -X PUT --data-binary @mnist.onnx -H "Content-Type: application/octet-stream
       "type": "tensor(float)"
     }
   ],
-  "predictors": [
+  "inputs": [
     {
       "name": "Input3",
       "shape": [
@@ -719,7 +719,7 @@ curl -X GET http://localhost:9090/v1/models/mnist
           "type": "tensor(float)"
         }
       ],
-      "predictors": [
+      "inputs": [
         {
           "name": "Input3",
           "shape": [
@@ -787,7 +787,7 @@ Content-Length: 92
 ```
 
 ## Deploy and Manage AI/ML models at scale
-See the [DaaS](https://www.autodeploy.ai/) system that deploys AI/ML models in production at scale on Kubernetes.
+See the [DaaS](https://www.autodeployai.com/) system that deploys AI/ML models in production at scale on Kubernetes.
 
 ## Support
 If you have any questions about the _AI-Serving_ library, please open issues on this repository.

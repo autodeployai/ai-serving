@@ -37,7 +37,7 @@
       "type": "string"
     }
   ],
-  "predictors": [
+  "inputs": [
     {
       "name": "sepal_length",
       "optype": "continuous",

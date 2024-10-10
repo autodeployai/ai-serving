@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2024 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,25 +17,37 @@
 package com.autodeployai.serving
 
 import akka.actor.ActorSystem
+import akka.dispatch.MessageDispatcher
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.Route
 import com.autodeployai.serving.http.Endpoints
 import com.autodeployai.serving.protobuf.GrpcServer
-import com.typesafe.config.ConfigFactory
-import org.slf4j.LoggerFactory
+import com.typesafe.config.{Config, ConfigFactory}
+import org.slf4j.{Logger, LoggerFactory}
 
 object AIServer extends Endpoints {
-  val log = LoggerFactory.getLogger(this.getClass)
+  val log: Logger = LoggerFactory.getLogger(this.getClass)
 
-  val config = ConfigFactory.load()
+  val config: Config = ConfigFactory.load()
 
-  implicit val system = ActorSystem("AI-Serving", config)
-  implicit val executionContext = system.dispatchers.lookup("akka.ai-predicting-dispatcher")
-  log.info(s"Predicting thread pool size: ${executionContext.configurator.config.getInt("thread-pool-executor.fixed-pool-size")}")
+  implicit val system: ActorSystem = ActorSystem("AI-Serving", config)
+  implicit val executionContext: MessageDispatcher = system.dispatchers.lookup("akka.ai-dispatcher")
 
-  lazy val route = up() ~ validate() ~ modelsV1() ~ modelV1() ~ modelVersionV1()
+  // Print all configurations of dispatcher.
+  log.info(s"Configurations of ai-dispatcher: " +  s"${
+    val result = new StringBuilder()
+    val entries = executionContext.configurator.config.entrySet()
+    val it = entries.iterator()
+    while (it.hasNext) {
+      val entry = it.next()
+      result.append(s"\n${entry.getKey}: ${entry.getValue.render()}");
+    }
+    result}")
 
-  def start(args: Array[String]) = {
+  lazy val route: Route = up() ~ validate() ~ modelsV1() ~ modelV1() ~ modelVersionV1()
+
+  def start(args: Array[String]): Unit = {
 
     val host = config.getString("service.http.interface")
     val httpPort = config.getInt("service.http.port")

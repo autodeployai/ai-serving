@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2024 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ package object protobuf {
     `type` = m.`type`,
     serialization = m.serialization,
     runtime = m.runtime,
-    predictors = toPb(m.predictors),
+    predictors = toPb(m.inputs),
     targets = toPb(m.targets),
     outputs = toPb(m.outputs),
     redundancies = toPb(m.redundancies),
@@ -118,7 +118,7 @@ package object protobuf {
     result = Some(toPb(r.result))
   )
 
-  def anyToValue(v: Any): Value = v match {
+  private def anyToValue(v: Any): Value = v match {
     case s: String              => Value(Kind.StringValue(s))
     case i: Int                 => Value(Kind.NumberValue(i))
     case i: java.lang.Integer   => Value(Kind.NumberValue(i.doubleValue()))

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2024 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,10 +21,10 @@ import scala.collection.mutable.ArrayBuffer
 /**
  * Holds multiple versions of the specified model.
  *
- * @param modelName
+ * @param modelName Model name specified
  */
 class ModelCache(val modelName: String) extends AutoCloseable {
-  val models: ArrayBuffer[Option[PredictModel]] = ArrayBuffer.empty
+  private val models: ArrayBuffer[Option[PredictModel]] = ArrayBuffer.empty
   var latestVersion: Int = 1
   ensureCapacity(latestVersion)
 

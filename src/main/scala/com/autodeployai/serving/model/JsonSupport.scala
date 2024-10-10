@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2024 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,27 +26,27 @@ import spray.json._
 trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
 
   implicit object TimestampFormat extends RootJsonFormat[Timestamp] {
-    val dateFormat = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss")
+    private val dateFormat = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss")
 
-    def read(json: JsValue) = json match {
+    def read(json: JsValue): Timestamp = json match {
       case JsString(s) => new Timestamp(dateFormat.parse(s).getTime)
       case _           => throw DeserializationException("Date expected")
     }
 
-    def write(obj: Timestamp) = JsString(dateFormat.format(obj.getTime))
+    def write(obj: Timestamp): JsString = JsString(dateFormat.format(obj.getTime))
   }
 
-  implicit val fieldFormat = jsonFormat5(Field)
+  implicit val fieldFormat: RootJsonFormat[Field] = jsonFormat5(Field)
 
-  implicit val modelInfoFormat = jsonFormat19(ModelInfo)
+  implicit val modelInfoFormat: RootJsonFormat[ModelInfo] = jsonFormat19(ModelInfo)
 
-  implicit val modelMetadataFormat = jsonFormat6(ModelMetadata.apply)
+  implicit val modelMetadataFormat: RootJsonFormat[ModelMetadata] = jsonFormat6(ModelMetadata.apply)
 
-  implicit val deployResponseFormat = jsonFormat2(DeployResponse)
+  implicit val deployResponseFormat: RootJsonFormat[DeployResponse] = jsonFormat2(DeployResponse)
 
-  implicit val predictRequestFormat = jsonFormat2(PredictRequest)
+  implicit val predictRequestFormat: RootJsonFormat[PredictRequest] = jsonFormat2(PredictRequest)
 
-  implicit val predictResponseFormat = jsonFormat1(PredictResponse)
+  implicit val predictResponseFormat: RootJsonFormat[PredictResponse] = jsonFormat1(PredictResponse)
 
   implicit object RecordSpecFormat extends RootJsonFormat[RecordSpec] {
     override def read(json: JsValue): RecordSpec = json match {
@@ -64,25 +64,25 @@ trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
   }
 
   implicit object AnyJsonFormat extends JsonFormat[Any] {
-    def read(value: JsValue) = JsonUtils.jsonToAny(value)
+    def read(value: JsValue): Any = JsonUtils.jsonToAny(value)
 
-    def write(a: Any) = JsonUtils.anyToJson(a)
+    def write(a: Any): JsValue = JsonUtils.anyToJson(a)
   }
 
   implicit object MapStringToAnyJsonFormat extends JsonFormat[Map[String, Any]] {
-    def read(json: JsValue) = json match {
+    def read(json: JsValue): Map[String, Any] = json match {
       case JsObject(fields) => fields.map[String, Any](x => x._1 -> JsonUtils.jsonToAny(x._2))
       case _                => throw DeserializationException("Object expected")
     }
 
-    def write(map: Map[String, Any]) = JsonUtils.mapToJson(map)
+    def write(map: Map[String, Any]): JsObject = JsonUtils.mapToJson(map)
   }
 
   def loadJson[T: JsonReader](filepath: Path): T = {
     new String(Files.readAllBytes(filepath), StandardCharsets.UTF_8).parseJson.convertTo[T]
   }
 
-  def saveJson[T: JsonWriter](filepath: Path, json: T) = {
+  def saveJson[T: JsonWriter](filepath: Path, json: T): Path = {
     Files.write(filepath, json.toJson.prettyPrint.getBytes(StandardCharsets.UTF_8))
   }
 }

@@ -9,7 +9,7 @@
       "type": "tensor(float)"
     }
   ],
-  "predictors": [
+  "inputs": [
     {
       "name": "Input3",
       "shape": [

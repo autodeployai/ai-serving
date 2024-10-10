@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2024 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ trait PredictModel extends Predictable with AutoCloseable {
 
   def copyright(): Option[String] = None
 
-  def predictors(): Seq[Field] = Seq.empty
+  def inputs(): Seq[Field] = Seq.empty
 
   def targets(): Seq[Field] = Seq.empty
 
@@ -60,11 +60,11 @@ trait PredictModel extends Predictable with AutoCloseable {
 
   def redundancies(): Seq[Field] = Seq.empty
 
-  def toModelInfo(): ModelInfo = ModelInfo(
+  def toModelInfo: ModelInfo = ModelInfo(
     `type` = `type`(),
     serialization = serialization(),
     runtime = runtime(),
-    predictors = toOption(predictors()),
+    inputs = toOption(inputs()),
     targets = toOption(targets()),
     outputs = toOption(outputs()),
     redundancies = toOption(redundancies()),
@@ -83,7 +83,6 @@ object PredictModel {
   def load(path: Path, modelType: String): PredictModel = modelType match {
     case "PMML" => PmmlModel.load(path)
     case "ONNX" => OnnxModel.load(path)
-    case "PFA"  => ???
     case _      => {
       throw ModelTypeNotSupportedException(toOption(modelType))
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2024 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,20 +21,20 @@ import java.net.URLConnection
 import java.nio.file.{Files, Path}
 import java.security.{DigestInputStream, MessageDigest}
 import java.util.Comparator
-
 import akka.http.scaladsl.model.ContentType
-import org.slf4j.LoggerFactory
+import org.slf4j.{Logger, LoggerFactory}
 
 import scala.annotation.tailrec
-import scala.collection.mutable.{ArrayBuffer, ArrayBuilder}
+import scala.collection.mutable
+import scala.collection.mutable.{ArrayBuffer}
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}
 
 object Utils {
 
-  val log = LoggerFactory.getLogger(this.getClass)
+  val log: Logger = LoggerFactory.getLogger(this.getClass)
 
-  def getFileExtension(filename: String, default: String = "") = {
+  def getFileExtension(filename: String, default: String = ""): String = {
     val dotIdx = filename.lastIndexOf('.')
     if (dotIdx == -1) {
       default
@@ -201,7 +201,7 @@ object Utils {
     output.result()
   }
 
-  def flattenArray(arr: Array[_], output: ArrayBuilder[Any]): Unit = {
+  def flattenArray(arr: Array[_], output: mutable.ArrayBuilder[Any]): Unit = {
     if (arr.getClass.getComponentType.isArray) {
       var i = 0
       while (i < arr.length) {

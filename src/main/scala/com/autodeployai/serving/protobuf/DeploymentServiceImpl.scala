@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2024 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -100,7 +100,7 @@ class DeploymentServiceImpl extends DeploymentServiceGrpc.DeploymentService {
     }
   }
 
-  def ensureModelSpec(modelSpec: Option[ModelSpec]): ModelSpec = modelSpec match {
+  private def ensureModelSpec(modelSpec: Option[ModelSpec]): ModelSpec = modelSpec match {
     case Some(value) if Utils.nonEmpty(value.name) => value
     case _                                         =>
       throw new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Missing model spec or name in the input request"))

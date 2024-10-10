@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2024 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +19,11 @@ package com.autodeployai.serving.errors
 import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.server.Directives.complete
 import akka.http.scaladsl.server._
-import org.slf4j.LoggerFactory
+import org.slf4j.{Logger, LoggerFactory}
 
 object ErrorHandler extends ErrorJsonSupport {
 
-  val log = LoggerFactory.getLogger(this.getClass)
+  val log: Logger = LoggerFactory.getLogger(this.getClass)
 
   def defaultExceptionHandler: ExceptionHandler = ExceptionHandler {
     case bex: BaseException => {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2024 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,11 @@
 package com.autodeployai.serving.deploy
 
 import java.nio.file.{Files, Path, Paths}
-import com.autodeployai.serving.model._
 import com.autodeployai.serving.errors.ModelNotFoundException
 import com.autodeployai.serving.model.{DeployResponse, JsonSupport, ModelInfo, ModelMetadata, PredictRequest, PredictResponse}
 import com.autodeployai.serving.utils.Utils
-import com.typesafe.config.ConfigFactory
-import org.slf4j.LoggerFactory
+import com.typesafe.config.{Config, ConfigFactory}
+import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable.ArrayBuffer
@@ -33,21 +32,21 @@ import scala.concurrent.{ExecutionContext, Future}
  */
 object ModelManager extends JsonSupport {
 
-  val log = LoggerFactory.getLogger(this.getClass)
+  val log: Logger = LoggerFactory.getLogger(this.getClass)
 
-  val config = ConfigFactory.load()
+  val config: Config = ConfigFactory.load()
 
-  val ASSET_MODELS = "models"
-  val MODEL_METADATA_FILE = "model.json"
-  val MODEL_VERSION_METADATA_FILE = "version.json"
-  val MODEL_FILE = "model"
-  val HOME_PATH = config.getString("service.home") match {
+  private val ASSET_MODELS = "models"
+  private val MODEL_METADATA_FILE = "model.json"
+  private val MODEL_VERSION_METADATA_FILE = "version.json"
+  private val MODEL_FILE = "model"
+  val HOME_PATH: String = config.getString("service.home") match {
     case "test" => Files.createTempDirectory("ai-serving-test-").toAbsolutePath.toString
     case value  => value
   }
   log.info(s"Service home located: ${HOME_PATH}")
 
-  val modelPool: TrieMap[String, ModelCache] = TrieMap.empty
+  private val modelPool: TrieMap[String, ModelCache] = TrieMap.empty
 
   /**
    * Validates an input model
@@ -59,7 +58,7 @@ object ModelManager extends JsonSupport {
    */
   def validate(path: Path, modelType: String)(implicit ec: ExecutionContext): Future[ModelInfo] = Future {
     val model = PredictModel.load(path, modelType)
-    model.toModelInfo().copy(createdAt = None, version = None)
+    model.toModelInfo.copy(createdAt = None, version = None)
   }
 
   /**
@@ -102,7 +101,7 @@ object ModelManager extends JsonSupport {
     val modelVersion = modelMetadata.latestVersion
     val versionPath = modelPath.resolve(modelVersion.toString)
     val versionMetadataPath = versionPath.resolve(MODEL_VERSION_METADATA_FILE)
-    val versionMetadata = model.toModelInfo().copy(
+    val versionMetadata = model.toModelInfo.copy(
       version = Some(modelVersion),
       hash = Utils.md5Hash(path),
       size = Utils.fileSize(path)

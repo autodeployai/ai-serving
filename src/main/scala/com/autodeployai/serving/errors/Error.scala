@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2024 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 package com.autodeployai.serving.errors
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
-import spray.json.DefaultJsonProtocol
+import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
 case class Error(error: String)
 
 trait ErrorJsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
-  implicit val errorFormat = jsonFormat1(Error)
+  implicit val errorFormat: RootJsonFormat[Error] = jsonFormat1(Error)
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2024 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ case class Field(name: String,
  * @param `type`        Model type.
  * @param serialization Model serialization type.
  * @param runtime       The runtime library to handle such model.
- * @param predictors    A list of predictors involved to predict this model.
+ * @param inputs        A list of inputs involved to predict this model.
  * @param targets       A list of targets.
  * @param outputs       A list of outputs could be produced by this model.
  * @param redundancies  A list of redundancy fields not picked up by this model.
@@ -65,7 +65,7 @@ case class Field(name: String,
 case class ModelInfo(`type`: String,
                      serialization: String,
                      runtime: String,
-                     predictors: Option[Seq[Field]] = None,
+                     inputs: Option[Seq[Field]] = None,
                      targets: Option[Seq[Field]] = None,
                      outputs: Option[Seq[Field]] = None,
                      redundancies: Option[Seq[Field]] = None,
@@ -106,12 +106,8 @@ case class ModelMetadata(id: String,
 }
 
 object ModelMetadata {
-  def apply(name: String) = {
+  def apply(name: String): ModelMetadata = {
     val now: Timestamp = new Timestamp(System.currentTimeMillis)
     new ModelMetadata(UUID.randomUUID().toString, name, now, now)
   }
 }
-
-
-
-

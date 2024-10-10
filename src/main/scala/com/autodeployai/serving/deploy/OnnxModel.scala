@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2024 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,16 +18,16 @@ package com.autodeployai.serving.deploy
 
 import java.nio._
 import java.nio.file.Path
-import com.autodeployai.serving.errors._
 import com.autodeployai.serving.utils.DataUtils._
 import com.autodeployai.serving.utils.Utils._
 import ai.onnxruntime.OrtSession.SessionOptions
 import ai.onnxruntime._
 import com.autodeployai.serving.errors.{MissingValueException, OnnxRuntimeLibraryNotFoundError, ShapeMismatchException, UnknownDataTypeException}
 import com.autodeployai.serving.model.{Field, PredictRequest, PredictResponse, RecordSpec}
-import com.typesafe.config.ConfigFactory
-import org.slf4j.LoggerFactory
+import com.typesafe.config.{Config, ConfigFactory}
+import org.slf4j.{Logger, LoggerFactory}
 
+import scala.annotation.tailrec
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Using}
@@ -48,7 +48,7 @@ case class InputsWrapper(inputs: java.util.Map[String, OnnxTensor]) extends Auto
  */
 class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends PredictModel {
 
-  val inputTensors = session.getInputInfo.asScala.map[String, InputTensor](x =>
+  private val inputTensors = session.getInputInfo.asScala.map[String, InputTensor](x =>
     x._1 -> InputTensor(x._2.getName, x._2.getInfo.asInstanceOf[TensorInfo]))
 
   override def predict(payload: PredictRequest): PredictResponse = {
@@ -103,7 +103,7 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
 
   override def serialization(): String = "onnx"
 
-  override def predictors(): Seq[Field] = {
+  override def inputs(): Seq[Field] = {
     session.getInputInfo.asScala.values.toSeq.map(x => {
       toField(x)
     })
@@ -161,6 +161,7 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
   }
 
 
+  @tailrec
   private def convertToTensor(name: String, tensorInfo: TensorInfo, inputValue: Option[Any], inputShape: Option[Seq[_]] = None): OnnxTensor = inputValue match {
     case Some(value) => {
       import OnnxJavaType._
@@ -314,11 +315,11 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
 
 object OnnxModel extends ModelLoader {
 
-  val log = LoggerFactory.getLogger(this.getClass)
-  val config = ConfigFactory.load()
+  val log: Logger = LoggerFactory.getLogger(this.getClass)
+  val config: Config = ConfigFactory.load()
 
-  lazy val env = OrtEnvironment.getEnvironment()
-  lazy val opts = {
+  private lazy val env = OrtEnvironment.getEnvironment()
+  private lazy val opts = {
     val obj = new SessionOptions()
 
     // optimization level

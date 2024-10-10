@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2024 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,9 +36,9 @@ import scala.concurrent.{ExecutionContext, Future}
 
 trait Endpoints extends JsonSupport {
 
-  def akkaResponseTimeLoggingFunction(loggingAdapter: LoggingAdapter,
-                                      requestTimestamp: Long,
-                                      level: LogLevel = Logging.InfoLevel)(req: HttpRequest)(res: RouteResult): Unit = {
+  private def akkaResponseTimeLoggingFunction(loggingAdapter: LoggingAdapter,
+                                              requestTimestamp: Long,
+                                              level: LogLevel = Logging.InfoLevel)(req: HttpRequest)(res: RouteResult): Unit = {
     val entry = res match {
       case Complete(resp) =>
         val responseTimestamp: Long = System.nanoTime
@@ -51,12 +51,12 @@ trait Endpoints extends JsonSupport {
     entry.logTo(loggingAdapter)
   }
 
-  def printResponseTime(log: LoggingAdapter) = {
+  private def printResponseTime(log: LoggingAdapter) = {
     val requestTimestamp = System.nanoTime
     akkaResponseTimeLoggingFunction(log, requestTimestamp)_
   }
 
-  val logResponseTime = DebuggingDirectives.logRequestResult(LoggingMagnet(printResponseTime))
+  private val logResponseTime = DebuggingDirectives.logRequestResult(LoggingMagnet(printResponseTime))
 
 
   def up(): Route = path("up") {

@@ -1,9 +1,9 @@
 name := (sys.props.getOrElse("gpu", "false") match {
-  case "true" | "1" => "ai-serving-gpu"
+  case "true" | "1" => "ai-serving-cuda"
   case _            => "ai-serving"
 })
 
-version := "1.0.2"
+version := "1.5.2"
 
 organization := "com.autodeployai"
 
@@ -17,7 +17,7 @@ startYear := Some(2019)
 
 licenses := Seq("Apache 2" -> new URL("http://www.apache.org/licenses/LICENSE-2.0.txt"))
 
-scalaVersion := "2.13.13"
+scalaVersion := "2.13.14"
 
 scalacOptions := Seq("-feature", "-language:_", "-unchecked", "-deprecation", "-encoding", "utf8")
 
@@ -25,7 +25,7 @@ scalacOptions in(Compile, doc) := Seq("-no-link-warnings")
 
 val akkaVersion = "2.7.0"
 val akkaHttpVersion = "10.5.3"
-val pmml4sVersion = "1.0.2"
+val pmml4sVersion = "1.5.2"
 val onnxruntimeVersion = "1.18.0"
 
 libraryDependencies ++= {
@@ -58,6 +58,7 @@ parallelExecution in Test := false
 
 assemblyMergeStrategy in assembly := {
   case "META-INF/io.netty.versions.properties" => MergeStrategy.last
+  case "META-INF/versions/9/module-info.class" => MergeStrategy.concat
   case PathList("google", "protobuf", xs @ _*)   => MergeStrategy.last
   case x                                       =>
     val oldStrategy = (assemblyMergeStrategy in assembly).value

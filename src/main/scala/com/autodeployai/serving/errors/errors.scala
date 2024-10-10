@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2024 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 package com.autodeployai.serving.errors
 
-import java.util.Arrays
+import java.util
 
 class BaseException(val message: String) extends Exception(message)
 
@@ -30,7 +30,7 @@ case class ModelTypeNotSupportedException(modelType: Option[String]) extends
   BaseException(modelType.map(x => s"Model type '${x}' not supported") getOrElse s"Unknown model type")
 
 case class ShapeMismatchException(actual: Array[Long], expected: Array[Long]) extends
-  BaseException(s"Shape mismatch: ${Arrays.toString(expected)} expected but ${Arrays.toString(actual)} got")
+  BaseException(s"Shape mismatch: ${util.Arrays.toString(expected)} expected but ${util.Arrays.toString(actual)} got")
 
 case class MissingValueException(name: String, `type`: String, shape: Array[Long]) extends
   BaseException(s"Missing value for '${name}' in the input request")

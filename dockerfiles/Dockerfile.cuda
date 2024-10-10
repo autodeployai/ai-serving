@@ -39,7 +39,7 @@ RUN apt-get update &&\
 
 COPY --from=0 /code/target/scala-2.13/*.jar .
 
-RUN ln -s ai-serving-gpu-assembly-*.jar ai-serving-gpu-assembly.jar
+RUN ln -s ai-serving-cuda-assembly-*.jar ai-serving-cuda-assembly.jar
 
-ENTRYPOINT exec java $JAVA_OPTS --add-exports java.base/jdk.internal.math=ALL-UNNAMED -Donnxruntime.backend=cuda -jar ai-serving-gpu-assembly.jar
+ENTRYPOINT exec java $JAVA_OPTS --add-exports java.base/jdk.internal.math=ALL-UNNAMED -Donnxruntime.backend=cuda -jar ai-serving-cuda-assembly.jar
 

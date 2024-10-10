@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2024 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ class PmmlModel(val model: Model) extends PredictModel {
       RecordSpec(records = payload.X.records.map(records => {
         records.map(record => {
           val outputs = model.predict(Series.fromMap(record, model.inputSchema))
-          outputs.filter(filter).toMap
+          outputs.filter(filter).asMap
         })
       }))
     } else {
@@ -49,7 +49,7 @@ class PmmlModel(val model: Model) extends PredictModel {
           if (outputColumns == null) {
             outputColumns = finalOutputs.columns.toSeq
           }
-          finalOutputs.toSeq
+          finalOutputs.asSeq
         })
       })
       RecordSpec(columns = Some(outputColumns), data = outputData)
@@ -78,7 +78,7 @@ class PmmlModel(val model: Model) extends PredictModel {
 
   override def copyright(): Option[String] = model.header.copyright
 
-  override def predictors(): Seq[Field] = model.inputFields.toSeq.map(x => toField(x))
+  override def inputs(): Seq[Field] = model.inputFields.toSeq.map(x => toField(x))
 
   override def targets(): Seq[Field] = model.targetFields.toSeq.map(x => toField(x))
 

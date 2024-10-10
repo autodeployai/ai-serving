@@ -10,10 +10,10 @@ There are several dockerfiles to configure ONNX Runtime against different platfo
 
 Use `docker pull` with any of the images and tags below to pull an image.
 
-| Build Flavor      | Base Image              | Docker Image tags    | Latest         |
-|-------------------|------------------------ |----------------------|----------------|
-| Default CPU       | autodeployai/ai-serving | :0.9.3, :0.9.4               | :latest        |
-| CUDA (GPU)        | autodeployai/ai-serving | :0.9.3-cuda, :0.9.4-cuda     | :latest-cuda   |
+| Build Flavor      | Base Image              | Docker Hub                                                         | Latest        |
+|-------------------|------------------------ |--------------------------------------------------------------------|---------------|
+| Default CPU       | autodeployai/ai-serving | [Tags](https://hub.docker.com/r/autodeployai/ai-serving/tags)                                                     | :latest       |
+| CUDA (GPU)        | autodeployai/ai-serving-cuda | [Tags](https://hub.docker.com/r/autodeployai/ai-serving-cuda/tags) | :latest   |
 
 ## Building and using Docker images
 **Use JAVA_OPTS environment**
@@ -26,7 +26,7 @@ The JVM will be started with `1g` amount of memory and will be able to use a max
 
 
 ### CPU
-**Ubuntu 18.04, CPU (OpenMP), Java Bindings**
+**Ubuntu 22.04, CPU (OpenMP), Java Bindings**
 
 1. Build the docker image from the Dockerfile in this repository.
 ```
@@ -39,7 +39,7 @@ docker run -it -v {local_writable_directory}:/opt/ai-serving -p {local_http_port
 ```
 
 ## CUDA
-**Ubuntu 18.04, CUDA 10.2 and CuDNN 8**
+**Ubuntu 22.04, CUDA 12.1.1 and CuDNN 8**
 
 1. Build the docker image from the Dockerfile in this repository.
 ```
