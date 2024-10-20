@@ -31,7 +31,6 @@ Serving AI/ML models in the open standard formats [PMML](http://dmg.org/pmml/v4-
     - [Curl](#curl)
       - [Scoring PMML models](#scoring-pmml-models)
       - [Scoring ONNX models](#scoring-onnx-models)
-- [Deploy and Manage AI/ML models at scale](#deploy-and-manage-aiml-models-at-scale)
 - [Support](#support)
 - [License](#license)
 
@@ -785,9 +784,6 @@ Content-Length: 92
 
 {"error":"Prediction request takes unknown content type: application/x-www-form-urlencoded"}
 ```
-
-## Deploy and Manage AI/ML models at scale
-See the [DaaS](https://www.autodeployai.com/) system that deploys AI/ML models in production at scale on Kubernetes.
 
 ## Support
 If you have any questions about the _AI-Serving_ library, please open issues on this repository.
