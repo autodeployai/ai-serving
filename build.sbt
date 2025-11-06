@@ -3,7 +3,7 @@ name := (sys.props.getOrElse("gpu", "false") match {
   case _            => "ai-serving"
 })
 
-version := "1.5.2"
+version := "1.6.0"
 
 organization := "com.autodeployai"
 
@@ -25,7 +25,7 @@ scalacOptions in(Compile, doc) := Seq("-no-link-warnings")
 
 val akkaVersion = "2.7.0"
 val akkaHttpVersion = "10.5.3"
-val pmml4sVersion = "1.5.2"
+val pmml4sVersion = "1.5.8"
 val onnxruntimeVersion = "1.18.0"
 
 libraryDependencies ++= {
