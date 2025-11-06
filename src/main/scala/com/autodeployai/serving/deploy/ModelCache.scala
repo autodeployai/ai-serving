@@ -47,6 +47,17 @@ class ModelCache(val modelName: String) extends AutoCloseable {
     }
   }
 
+  def update(version: Int, model: Option[PredictModel]): ModelCache = {
+    if (version > 0 && version <= models.length) {
+      val oldModel = models(version - 1)
+      oldModel.foreach(_.close())
+    } else {
+      ensureCapacity(version)
+    }
+    models.update(version - 1, model)
+    this
+  }
+
   override def close(): Unit = {
     models.foreach(x => x.foreach(_.close()))
   }
