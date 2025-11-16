@@ -3,7 +3,7 @@ name := (sys.props.getOrElse("gpu", "false") match {
   case _            => "ai-serving"
 })
 
-version := "1.6.0"
+version := "2.0.0"
 
 organization := "com.autodeployai"
 
@@ -17,7 +17,7 @@ startYear := Some(2019)
 
 licenses := Seq("Apache 2" -> new URL("http://www.apache.org/licenses/LICENSE-2.0.txt"))
 
-scalaVersion := "2.13.14"
+scalaVersion := "2.13.17"
 
 scalacOptions := Seq("-feature", "-language:_", "-unchecked", "-deprecation", "-encoding", "utf8")
 
@@ -26,7 +26,7 @@ scalacOptions in(Compile, doc) := Seq("-no-link-warnings")
 val akkaVersion = "2.7.0"
 val akkaHttpVersion = "10.5.3"
 val pmml4sVersion = "1.5.8"
-val onnxruntimeVersion = "1.18.0"
+val onnxruntimeVersion = "1.22.0"
 
 libraryDependencies ++= {
   (sys.props.getOrElse("gpu", "false") match {
@@ -38,7 +38,7 @@ libraryDependencies ++= {
     "com.typesafe.akka" %% "akka-stream" % akkaVersion,
     "com.typesafe.akka" %% "akka-http-spray-json" % akkaHttpVersion,
     "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,
-    "ch.qos.logback" % "logback-classic" % "1.2.3",
+    "ch.qos.logback" % "logback-classic" % "1.5.13",
     "io.grpc" % "grpc-netty" % scalapb.compiler.Version.grpcJavaVersion,
     "com.thesamet.scalapb" %% "scalapb-runtime-grpc" % scalapb.compiler.Version.scalapbVersion,
     "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
@@ -49,6 +49,10 @@ libraryDependencies ++= {
   )
 }
 
+packageOptions := Seq(
+  Package.ManifestAttributes(("pmml4s-Version", pmml4sVersion)),
+  Package.ManifestAttributes(("onnxruntime-Version", onnxruntimeVersion)),
+)
 
 PB.targets in Compile := Seq(
   scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value

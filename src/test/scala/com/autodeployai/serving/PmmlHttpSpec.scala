@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2025 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 package com.autodeployai.serving
 
-import com.autodeployai.serving.model._
 import akka.http.scaladsl.model.ContentTypes._
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.{HttpEntity, StatusCodes}
@@ -32,6 +31,7 @@ class PmmlHttpSpec extends BaseHttpSpec {
       val path = getResource("single_iris_dectree.xml")
       Post("/v1/validate", HttpEntity.fromPath(`text/xml(UTF-8)`, path)) ~> route ~> check {
         status shouldEqual StatusCodes.OK
+        val modelInfo = responseAs[ModelInfo]
         responseAs[ModelInfo] shouldBe loadJson[ModelInfo](getResource("single_iris_dectree.json"))
       }
     }

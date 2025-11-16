@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024 AutoDeployAI
+ * Copyright (c) 2019-2025 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 package com.autodeployai.serving.deploy
 
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.concurrent.TrieMap
 
 /**
  * Holds multiple versions of the specified model.
@@ -24,56 +24,57 @@ import scala.collection.mutable.ArrayBuffer
  * @param modelName Model name specified
  */
 class ModelCache(val modelName: String) extends AutoCloseable {
-  private val models: ArrayBuffer[Option[PredictModel]] = ArrayBuffer.empty
-  var latestVersion: Int = 1
-  ensureCapacity(latestVersion)
+  val models:  TrieMap[String, PredictModel] = TrieMap.empty
+  var latestVersion: Option[String] = None
 
-  def this(modelName: String, latestVersion: Int) = {
+  def this(modelName: String, latestVersion: Option[String]) = {
     this(modelName)
     this.latestVersion = latestVersion
   }
 
-  def getOrLoad(modelVersion: Option[Int] = None): Option[PredictModel] = {
-    val version = modelVersion.getOrElse(latestVersion)
-    if (version > 0 && version <= models.length) {
-      val model = models(version - 1)
-      model.orElse(updateAt(version))
+  def put(version: String, model: PredictModel): ModelCache = {
+    models.put(version, model)
+    this
+  }
+
+  def withLatestVersion(latestVersion: String): ModelCache = {
+    this.latestVersion = Option(latestVersion)
+    this
+  }
+
+  def contains(modelVersion: Option[String] = None): Boolean = {
+    val version = modelVersion.orElse(getLatestVersion)
+    version.exists(x => models.contains(x))
+  }
+
+  def versions: Array[String] = {
+    models.keySet.toArray
+  }
+
+  def getOrLoad(modelVersion: Option[String] = None): Option[PredictModel] = {
+    val versionOpt = modelVersion.orElse(latestVersion)
+    if (versionOpt.isDefined) {
+      val version = versionOpt.get
+      val model = models.get(version)
+      model orElse {
+        val loaded = ModelManager.loadModel(modelName, version)
+        models.put(version, loaded)
+        Option(loaded)
+      }
     } else {
-      latestVersion = ModelManager.getLatestVersion(modelName)
-      ensureCapacity(latestVersion)
-      if (version > 0 && version <= latestVersion) {
-        updateAt(version)
+      if (models.nonEmpty) {
+        Option(models.last._2)
       } else None
     }
   }
 
-  def update(version: Int, model: Option[PredictModel]): ModelCache = {
-    if (version > 0 && version <= models.length) {
-      val oldModel = models(version - 1)
-      oldModel.foreach(_.close())
-    } else {
-      ensureCapacity(version)
-    }
-    models.update(version - 1, model)
-    this
+  def getLatestVersion: Option[String] = latestVersion orElse {
+    if (models.nonEmpty) Option(models.last._1) else None
   }
+
+  def size: Int = models.size
 
   override def close(): Unit = {
-    models.foreach(x => x.foreach(_.close()))
+    models.foreach(x => x._2.close())
   }
-
-  private def updateAt(version: Int): Option[PredictModel] = {
-    val model = Option(ModelManager.loadModel(modelName, version))
-    models.update(version - 1, model)
-    model
-  }
-
-  private def ensureCapacity(size: Int): ModelCache = {
-    if (size > models.size) {
-      models.sizeHint(size)
-      models ++= Array.fill(size - models.size)(None)
-    }
-    this
-  }
-
 }

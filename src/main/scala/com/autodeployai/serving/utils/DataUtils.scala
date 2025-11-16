@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024 AutoDeployAI
+ * Copyright (c) 2019-2025 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,10 @@
 
 package com.autodeployai.serving.utils
 
+import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
+import scala.collection.mutable
 import scala.util.Try
 
 object DataUtils {
@@ -59,5 +63,46 @@ object DataUtils {
     case s: String => s
     case _         => Try(value.toString).getOrElse("")
   }
+
+  def readBinaryString(buffer: ByteBuffer): Array[String] = {
+    val builder = mutable.ArrayBuilder.make[String]
+    buffer.position(0)
+    while (buffer.hasRemaining) {
+      val len = buffer.getInt()
+      val pos = buffer.position()
+      val subBuffer = buffer.slice(pos, len)
+      val str = StandardCharsets.UTF_8.decode(subBuffer).toString
+      buffer.position(pos + len)
+      builder += str
+    }
+    builder.result()
+  }
+
+  def writeBinaryString(array: Array[String]): ByteBuffer = {
+    val buffer = new ByteArrayOutputStream()
+    val len = array.length
+    var i = 0
+
+    val writeBuffer = new Array[Byte](4)
+    while (i < len) {
+      val str = array(i)
+      val bytes = str.getBytes(StandardCharsets.UTF_8)
+      val v = bytes.length
+
+      // Write size first
+      writeBuffer(0) = (v >>> 24).toByte
+      writeBuffer(1) = (v >>> 16).toByte
+      writeBuffer(2) = (v >>> 8).toByte
+      writeBuffer(3) = (v >>> 0).toByte
+      buffer.write(writeBuffer)
+
+      // Write content then
+      buffer.write(bytes)
+
+      i += 1
+    }
+    ByteBuffer.wrap(buffer.toByteArray).asReadOnlyBuffer()
+  }
+
 
 }

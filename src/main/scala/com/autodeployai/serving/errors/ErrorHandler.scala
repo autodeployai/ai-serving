@@ -19,6 +19,7 @@ package com.autodeployai.serving.errors
 import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.server.Directives.complete
 import akka.http.scaladsl.server._
+import io.grpc.{Status, StatusRuntimeException}
 import org.slf4j.{Logger, LoggerFactory}
 
 object ErrorHandler extends ErrorJsonSupport {
@@ -33,12 +34,12 @@ object ErrorHandler extends ErrorJsonSupport {
         case _                                  => BadRequest
       }
       val error = bex.message
-      log.warn(error)
+      log.error(error)
       complete(code, Error(error))
     }
     case ex: Throwable      => {
       val error = ex.getMessage
-      log.error("Unexpected error:", ex)
+      log.error("Unexpected error: ", ex)
       complete(InternalServerError, Error(error))
     }
     case _                  => {
@@ -72,4 +73,19 @@ object ErrorHandler extends ErrorJsonSupport {
     }
     .result()
 
+
+  def grpcHandler(ex: Throwable): StatusRuntimeException = ex match {
+    case bex: BaseException =>
+      val status = bex match {
+        case _: ModelNotFoundException          => Status.NOT_FOUND
+        case _: OnnxRuntimeLibraryNotFoundError => Status.INTERNAL
+        case _                                  => Status.INVALID_ARGUMENT
+      }
+
+      log.error(bex.getMessage)
+      new StatusRuntimeException(status.withDescription(bex.message))
+    case _                  =>
+      log.error("Unexpected error: " + ex.getMessage)
+      new StatusRuntimeException(Status.INTERNAL.withDescription(ex.getMessage))
+  }
 }

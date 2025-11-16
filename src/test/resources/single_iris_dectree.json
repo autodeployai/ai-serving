@@ -63,7 +63,7 @@
       "values": "[0.1,2.5]"
     }
   ],
-  "runtime": "PMML4S",
+  "runtime": "pmml4s",
   "serialization": "pmml",
   "targets": [
     {

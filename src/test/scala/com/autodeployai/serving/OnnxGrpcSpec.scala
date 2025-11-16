@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2025 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ class OnnxGrpcSpec extends BaseGrpcSpec {
       val input = getResource("mnist.onnx")
       val deployResponse = blockingStub().deploy(DeployRequest(name, ByteString.copyFrom(Files.readAllBytes(input)), "ONNX"))
 
-      val tensor0 = onnx.TensorProto.parseFrom(Files.readAllBytes(getResource("mnist_input_0.pb")))
+      val tensor0 = TensorProto.parseFrom(Files.readAllBytes(getResource("mnist_input_0.pb")))
       val predictResponse = blockingStub().predict(PredictRequest(deployResponse.modelSpec).withX(
         RecordSpec(records = List(Record(Map("Input3" -> Value(Kind.TensorValue(tensor0))))))))
 
@@ -62,9 +62,9 @@ class OnnxGrpcSpec extends BaseGrpcSpec {
       val input = getResource("mnist.onnx")
       val deployResponse = blockingStub().deploy(DeployRequest(name, ByteString.copyFrom(Files.readAllBytes(input)), "ONNX"))
 
-      val tensor0 = onnx.TensorProto.parseFrom(Files.readAllBytes(getResource("mnist_input_0.pb")))
-      val tensor1 = onnx.TensorProto.parseFrom(Files.readAllBytes(getResource("mnist_input_1.pb")))
-      val tensor2 = onnx.TensorProto.parseFrom(Files.readAllBytes(getResource("mnist_input_2.pb")))
+      val tensor0 = TensorProto.parseFrom(Files.readAllBytes(getResource("mnist_input_0.pb")))
+      val tensor1 = TensorProto.parseFrom(Files.readAllBytes(getResource("mnist_input_1.pb")))
+      val tensor2 = TensorProto.parseFrom(Files.readAllBytes(getResource("mnist_input_2.pb")))
 
       val predictResponse = blockingStub().predict(PredictRequest(deployResponse.modelSpec).withX(
         RecordSpec(

@@ -16,6 +16,7 @@
 
 package com.autodeployai.serving.protobuf
 
+import inference.GRPCInferenceServiceGrpc
 import io.grpc.{Server, ServerBuilder}
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -32,6 +33,7 @@ class GrpcServer(executionContext: ExecutionContext, port: Int) {
     server = ServerBuilder.
       forPort(port).
       addService(DeploymentServiceGrpc.bindService(new DeploymentServiceImpl, executionContext)).
+      addService(GRPCInferenceServiceGrpc.bindService(new DeploymentServiceImplV2, executionContext)).
       build.
       start
     log.info("AI-Serving grpc server started, listening on " + port)
