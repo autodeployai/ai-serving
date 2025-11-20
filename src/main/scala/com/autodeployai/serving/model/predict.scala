@@ -54,10 +54,10 @@ case class PredictResponse(result: RecordSpec)
  * @param data
  */
 case class RequestInput(name: String,
-                        shape: Array[Long],
+                        shape: Seq[Long],
                         datatype: String,
-                        parameters: Option[Map[String, Any]],
-                        data: Any)
+                        data: Any,
+                        parameters: Option[Map[String, Any]] = None)
 
 /**
  * Contains a request output expected by client
@@ -65,7 +65,7 @@ case class RequestInput(name: String,
  * @param parameters
  */
 case class RequestOutput(name: String,
-                         parameters: Option[Map[String, Any]])
+                         parameters: Option[Map[String, Any]] = None)
 
 /**
  * An inference request that contains all required inputs.
@@ -74,10 +74,10 @@ case class RequestOutput(name: String,
  * @param inputs
  * @param outputs
  */
-case class InferenceRequest(id: Option[String],
-                            parameters: Option[Map[String, Any]],
-                            inputs: Seq[RequestInput],
-                            outputs: Option[Seq[RequestOutput]])
+case class InferenceRequest(id: Option[String] = None,
+                            parameters: Option[Map[String, Any]] = None,
+                            inputs: Seq[RequestInput] = Seq.empty,
+                            outputs: Option[Seq[RequestOutput]] = None)
 
 /**
  * A response output contains a tensor with specified shape
@@ -88,10 +88,23 @@ case class InferenceRequest(id: Option[String],
  * @param data  An array of values or a single scalar
  */
 case class ResponseOutput(name: String,
-                          shape: Array[Long],
+                          shape: Seq[Long],
                           datatype: String,
-                          parameters: Option[Map[String, Any]],
-                          data: Any)
+                          data: Any,
+                          parameters: Option[Map[String, Any]] = None
+                          ) {
+
+  def dataToSeq: ResponseOutput = ResponseOutput(
+    name = this.name,
+    shape = this.shape,
+    datatype = this.datatype,
+    data = this.data match {
+      case a: Array[_] => a.toSeq
+      case _ => this.data
+    },
+    parameters = this.parameters
+  )
+}
 
 /**
  * An inference response with all expected outputs
@@ -101,11 +114,11 @@ case class ResponseOutput(name: String,
  * @param parameters
  * @param outputs
  */
-case class InferenceResponse(model_name: String="",
-                             model_version: Option[String]=None,
-                             id: Option[String],
-                             parameters: Option[Map[String, Any]],
-                             outputs: Seq[ResponseOutput]) {
+case class InferenceResponse(model_name: String = "",
+                             model_version: Option[String] = None,
+                             id: Option[String] = None,
+                             parameters: Option[Map[String, Any]] = None,
+                             outputs: Seq[ResponseOutput] = Seq.empty) {
 
   def withModelSpec(name: String, version: Option[String]): InferenceResponse =
     InferenceResponse(model_name = name,
@@ -113,4 +126,12 @@ case class InferenceResponse(model_name: String="",
       id = this.id,
       parameters = this.parameters,
       outputs = this.outputs)
+
+  def dataToSeq: InferenceResponse = InferenceResponse(
+    model_name = this.model_name,
+    model_version = this.model_version,
+    id = this.id,
+    parameters = this.parameters,
+    outputs = this.outputs.map(x => x.dataToSeq)
+  )
 }

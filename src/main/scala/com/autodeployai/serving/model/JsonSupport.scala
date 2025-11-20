@@ -16,8 +16,6 @@
 
 package com.autodeployai.serving.model
 
-import ai.onnxruntime.platform.Fp16Conversions
-
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 import java.sql.Timestamp
@@ -25,8 +23,6 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import com.autodeployai.serving.errors.{InvalidInputDataException, InvalidInputException}
 import com.autodeployai.serving.utils.{JsonUtils, Utils}
 import spray.json._
-
-import java.nio.{ByteBuffer, ShortBuffer}
 
 trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
 
@@ -187,7 +183,7 @@ trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
       case JsObject(fields) =>
         val name = fields("name").convertTo[String]
         val datatype = fields("datatype").convertTo[String]
-        val shape = fields("shape").convertTo[Array[Long]]
+        val shape = fields("shape").convertTo[Seq[Long]]
         val length = Utils.elementCount(shape).toInt
         val data = fields("data") match {
           case array: JsArray  =>
@@ -246,11 +242,14 @@ trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
         case _ =>
           JsonUtils.anyToJson(a)
       }
-      JsObject("name" -> JsString(a.name),
+
+      val members: Seq[(String, JsValue)] = Seq(
+        "name" -> JsString(a.name),
         "shape" -> a.shape.toJson,
         "datatype" -> JsString(a.datatype),
-        "parameters" -> a.parameters.toJson,
-        "data" -> data)
+        "data" -> data
+      ) ++ a.parameters.map(x => "parameters" -> x.toJson).toSeq
+      JsObject(members: _*)
     }
   }
 

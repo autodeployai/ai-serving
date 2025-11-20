@@ -27,7 +27,6 @@ import protobuf.TensorProto.DataType._
 
 import java.nio.charset.StandardCharsets
 import scala.collection.immutable.ArraySeq
-import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 package object protobuf {
@@ -127,8 +126,8 @@ package object protobuf {
 
   def toPb(r: model.InferenceResponse): ModelInferResponse =  {
     val (outputs, rawOutputContents: Seq[ByteString]) = if (isRawOutput(r)) {
-      val contents  = r.outputs.map(x => x.data match {
-        case a: Array[Byte]   => ByteString.copyFrom(a)
+      val contents: Seq[ByteString]  = r.outputs.map(x => x.data match {
+        case a: Array[Byte]   => ByteString.copyFrom(a);
         case a: Array[String] => DataUtils.writeBinaryString(a)
         case b => throw new BaseException(s"Unexpected output value: $b")
       })
@@ -314,7 +313,7 @@ package object protobuf {
     if (!v.rawData.isEmpty) {
       // When this raw_data field is used to store tensor value, elements MUST
       // be stored in as fixed-width, little-endian order.
-      (v.rawData.asReadOnlyByteBuffer().order(ByteOrder.LITTLE_ENDIAN), v.dims)
+      (v.rawData.asReadOnlyByteBuffer().order(ByteOrder.nativeOrder), v.dims)
     } else {
       v.dataType match {
         case FLOAT.index | COMPLEX64.index                                                                    =>
@@ -346,10 +345,10 @@ package object protobuf {
         val tensor = x._1
         model.RequestInput(
           name = tensor.name,
-          shape = tensor.shape.toArray,
+          shape = tensor.shape,
           datatype = tensor.datatype,
           parameters = Utils.toOption(tensor.parameters.map(x => x._1 -> fromPb(x._2))),
-          data = x._2.asReadOnlyByteBuffer().order(ByteOrder.LITTLE_ENDIAN)
+          data = x._2.asReadOnlyByteBuffer().order(ByteOrder.nativeOrder)
         )
       }
     } else {
@@ -368,24 +367,25 @@ package object protobuf {
     model.RequestOutput(name = output.name, parameters = Utils.toOption(output.parameters.map(x => x._1 -> fromPb(x._2))))
   }
 
-  def fromPb(parameter: inference.InferParameter): Option[Any] = {
+  def fromPb(parameter: inference.InferParameter): Any = {
     val choice = parameter.parameterChoice
-    if (choice.isBoolParam)
+    val result = if (choice.isBoolParam)
       choice.boolParam
     else if (choice.isStringParam)
       choice.stringParam
     else if (choice.isInt64Param)
       choice.int64Param
     else None
+    result.orNull
   }
 
   def fromPb(tensor: ModelInferRequest.InferInputTensor): model.RequestInput = {
     model.RequestInput(
       name = tensor.name,
-      shape = tensor.shape.toArray,
+      shape = tensor.shape,
       datatype = tensor.datatype,
       parameters = Utils.toOption(tensor.parameters.map(x => x._1 -> fromPb(x._2))),
-      data = tensor.contents.map(fromPb(tensor.datatype, _))
+      data = tensor.contents.map(fromPb(tensor.datatype, _)).orNull
     )
   }
 
@@ -407,9 +407,9 @@ package object protobuf {
         content.fp64Contents.toArray
       case model.DataType.BYTES =>
         if (content.bytesContents.size == 1) {
-          content.bytesContents.head.asReadOnlyByteBuffer().order(ByteOrder.LITTLE_ENDIAN)
+          content.bytesContents.head.asReadOnlyByteBuffer().order(ByteOrder.nativeOrder)
         } else {
-          ByteString.copyFrom(content.bytesContents.asJava).asReadOnlyByteBuffer().order(ByteOrder.LITTLE_ENDIAN)
+          ByteString.copyFrom(content.bytesContents.asJava).asReadOnlyByteBuffer().order(ByteOrder.nativeOrder)
         }
       case _ =>
         throw new BaseException(s"The ${datatype} data type must be represented as raw content as there is no specific data type for a 16-bit float type.")

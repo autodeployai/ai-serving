@@ -6,7 +6,7 @@
         1,
         10
       ],
-      "type": "tensor(float)"
+      "type": "tensor[FP32]"
     }
   ],
   "inputs": [
@@ -18,10 +18,10 @@
         28,
         28
       ],
-      "type": "tensor(float)"
+      "type": "tensor[FP32]"
     }
   ],
-  "runtime": "ONNX Runtime",
+  "runtime": "onnxruntime",
   "serialization": "onnx",
   "type": "ONNX"
 }

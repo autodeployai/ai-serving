@@ -158,8 +158,7 @@ trait Endpoints extends JsonSupport with HttpSupport {
                 }
               }
             }
-            case "application/vnd.google.protobuf" | "application/x-protobuf" | "application/octet-stream"
-                                    => {
+            case "application/vnd.google.protobuf" | "application/x-protobuf" | "application/octet-stream"  =>
               extractDataBytes { data =>
                 val bytesFut: Future[ByteString] = data.runFold(ByteString.empty) { case (acc, b) => acc ++ b }
                 val predictedPbFut = bytesFut.flatMap { bytes =>
@@ -175,7 +174,6 @@ trait Endpoints extends JsonSupport with HttpSupport {
                     status = StatusCodes.OK,
                     entity = HttpEntity(result)))
                 }
-              }
             }
             case other              =>
               throw UnknownContentTypeException(Utils.toOption(other))

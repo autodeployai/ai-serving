@@ -29,6 +29,7 @@ import com.typesafe.config.{Config, ConfigFactory}
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.util
+import scala.annotation.tailrec
 import scala.collection.immutable.ArraySeq
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Using}
@@ -98,7 +99,7 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
 
   override def predict(request: PredictRequest, grpc: Boolean): PredictResponse = {
 
-    val requestedOutput = request.filter.map(x => {
+    val requestedOutput = request.filter.flatMap(x => toOption(x)).map(x => {
       val set = new util.HashSet[String]()
       x.foreach(output => {
         if (outputNames.contains(output)) {
@@ -327,11 +328,15 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
     }
   }
 
-  private def convertToTensor(name: String, tensorInfo: TensorInfo, inputValue: Option[Any], inputShape: Option[Array[Long]] = None): OnnxTensor = inputValue match {
+  @tailrec
+  private def convertToTensor(name: String, tensorInfo: TensorInfo, inputValue: Option[Any], inputShape: Option[Seq[_]] = None): OnnxTensor = inputValue match {
     case Some(value) => {
       import OnnxJavaType._
       val expectedShape = tensorInfo.getShape
       value match {
+        case (v, s: Seq[_]) => {
+          convertToTensor(name, tensorInfo, Option(v), Option(s))
+        }
         case buffer: ByteBuffer =>
           val shape = inputShape.map(x => convertShape(x)).getOrElse(expectedShape)
           val convertedShape = if (isDynamicShape(expectedShape)) shape else expectedShape
@@ -521,15 +526,15 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
     }
   }
 
-  private def convertShape(shape: Array[_]): Array[Long] = {
+  private def convertShape(shape: Seq[_]): Array[Long] = {
     val result = Array.ofDim[Long](shape.length)
-    shape.zipWithIndex.foreach(x =>result(x._2) = {
-      x._1 match {
+    shape.zipWithIndex.foreach(x =>
+      result(x._2) = x._1 match {
         case element: Long    => element
         case element: Number  => element.longValue()
         case _                => x.toString().toLong
       }
-    })
+    )
     result
   }
 

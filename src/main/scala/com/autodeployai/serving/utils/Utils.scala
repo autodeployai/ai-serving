@@ -231,23 +231,24 @@ object Utils {
   }
 
   def dataTypeV1ToV2(dataType: String): String = dataType match {
-    case "string"         => "BYTES"
-    case "integer"        => "INT32"
-    case "float"          => "FP32"
-    case "double"         => "FP64"
-    case "boolean"        => "BOOL"
-    case "date"           => "BYTES"
-    case "time"           => "BYTES"
-    case "dateTime"       => "BYTES"
-    case "dateDaysSince[0]"           => "INT64"
-    case "dateDaysSince[1960]"        => "INT64"
-    case "dateDaysSince[1970]"        => "INT64"
-    case "dateDaysSince[1980]"        => "INT64"
-    case "timeSeconds"                => "INT32"
-    case "dateTimeSecondsSince[0]"    => "INT64"
-    case "dateTimeSecondsSince[1960]" => "INT64"
-    case "dateTimeSecondsSince[1970]" => "INT64"
-    case "dateTimeSecondsSince[1980]" => "INT64"
+    case "string"         =>
+      "BYTES"
+    case "integer"        =>
+      "INT32"
+    case "float"          =>
+      "FP32"
+    case "double" | "real"=>
+      "FP64"
+    case "boolean"        =>
+      "BOOL"
+    case "date" | "time" | "dateTime" =>
+      "BYTES"
+    case "dateDaysSince[0]" | "dateDaysSince[1960]" | "dateDaysSince[1970]" | "dateDaysSince[1980]" =>
+      "INT64"
+    case "timeSeconds" =>
+      "INT32"
+    case "dateTimeSecondsSince[0]" | "dateTimeSecondsSince[1960]" | "dateTimeSecondsSince[1970]" | "dateTimeSecondsSince[1980]" =>
+      "INT64"
     case _                =>
       val unknown = "UNKNOWN"
       if (dataType.startsWith("tensor")) {
@@ -297,8 +298,7 @@ object Utils {
 
     ServerMetadataResponse(
       name = name,
-      version = version,
-      extensions = Seq(s"pmml4s=${pmmlVersion}",
-        if (name.contains("cuda")) s"onnxruntime_gpu=${onnxruntimeVersion}" else s"onnxruntime=${onnxruntimeVersion}"))
+      version = version
+    )
   }
 }

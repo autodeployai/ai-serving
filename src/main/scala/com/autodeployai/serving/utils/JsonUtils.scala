@@ -138,7 +138,7 @@ object JsonUtils {
       case (array: JsArray, _: Int)   =>
         val count = jsArrayToFP32(array, buffer, idx)
         idx += count
-        result + count
+        result += count
       case (scalar: JsValue, i: Int)  =>
         buffer(idx + i) = jsonToFP32(scalar)
         result += 1

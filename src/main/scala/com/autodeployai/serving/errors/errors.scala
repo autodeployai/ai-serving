@@ -52,8 +52,8 @@ case class InputNotSupportedException(input: String, typ: String) extends
 case class OutputNotSupportedException(input: String, typ: String) extends
   BaseException(s"The output field '${input}' with value ${typ} not supported")
 
-case class InvalidInputException(field: String, shape: Array[Long], elementCount: Int) extends
-  BaseException(s"The input ${field} with shape ${util.Arrays.toString(shape)} ${Utils.elementCount(shape)} expected but ${elementCount} got")
+case class InvalidInputException(field: String, shape: Seq[Long], elementCount: Int) extends
+  BaseException(s"The input ${field} with shape $shape ${Utils.elementCount(shape)} expected but ${elementCount} got")
 
 case class InvalidInputDataException(field: String) extends
   BaseException(s"The input ${field} tensor data expected but scalar or map got")

@@ -1,0 +1,42 @@
+/*
+ * Copyright (c) 2025 AutoDeployAI
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.autodeployai.serving
+
+import inference.{ServerLiveRequest, ServerLiveResponse, ServerMetadataRequest, ServerMetadataResponse, ServerReadyRequest, ServerReadyResponse}
+
+
+class ServerGrpcV2Spec extends BaseGrpcSpec {
+
+  "The Sever GRPC service V2" should {
+
+    "return an OK status response for calling 'serverLive'" in {
+      val serverLiveRequest = blockingStubV2().serverLive(ServerLiveRequest())
+      serverLiveRequest shouldEqual ServerLiveResponse(live = true)
+    }
+
+    "return an OK status response for calling 'serverReady'" in {
+      val serverReadyResponse = blockingStubV2().serverReady(ServerReadyRequest())
+      serverReadyResponse shouldEqual ServerReadyResponse(ready = true)
+    }
+
+    "return an OK status response for calling 'serverMetadata'" in {
+      val serverMetadataResponse = blockingStubV2().serverMetadata(ServerMetadataRequest())
+      serverMetadataResponse.name shouldEqual "ai-serving"
+    }
+  }
+
+}

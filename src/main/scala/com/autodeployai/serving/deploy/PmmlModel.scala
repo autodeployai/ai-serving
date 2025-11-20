@@ -17,12 +17,14 @@
 package com.autodeployai.serving.deploy
 
 import java.nio.file.Path
-import com.autodeployai.serving.errors.InvalidModelException
-import com.autodeployai.serving.model.{Field, InferenceRequest, InferenceResponse, PredictRequest, PredictResponse, RecordSpec, ResponseOutput}
-import com.autodeployai.serving.utils.Utils
+import com.autodeployai.serving.errors.{InputNotSupportedException, InvalidModelException}
+import com.autodeployai.serving.model.{DataType, Field, InferenceRequest, InferenceResponse, PredictRequest, PredictResponse, RecordSpec, ResponseOutput}
+import com.autodeployai.serving.utils.{DataUtils, Utils}
 import org.pmml4s.common.{BooleanType, IntegerType, NumericType}
 import org.pmml4s.data.Series
 import org.pmml4s.model.Model
+
+import java.nio.ByteBuffer
 
 /**
  * Supports the model of Predictive Model Markup Language (PMML)
@@ -67,17 +69,33 @@ class PmmlModel(val model: Model) extends PredictModel {
     val filter = request.outputs.map(x => x.map(y => y.name)).orNull
 
     val names = request.inputs.map(x => x.name)
-    val data = request.inputs.map(x => x.data.asInstanceOf[Array[_]])
+    val data = request.inputs.map(x => x.data match {
+      case a: Array[_]        =>
+        a
+      case buffer: ByteBuffer =>
+        DataUtils.convertToArray(buffer, DataType.withName(x.datatype))
+      case _ =>
+        throw InputNotSupportedException(x.name, x.datatype)
+    })
 
-    // Suppose all inputs have the same shape
-    val size = if (data.nonEmpty) data.head.length else 0
+    val rawOutput = if (grpc) {
+      request.parameters.flatMap(x => x.get("raw_output").map {
+        case b: Boolean => b
+        case _ => false
+      }).getOrElse(false)
+    } else false
+
+    // Get the maximum value as the final length
+    val size = data.map(x => x.length).max
 
     val series = Array.ofDim[Series](size)
     var outputColumns: Array[String] = Array.empty
 
     var i = 0
     while (i < size) {
-      val record = names.zip(data.map(x => x(i))).toMap
+      val record = names.zip(data.map(x =>
+        if (i < x.length) x(i) else null
+      )).toMap
       val output = model.predict(Series.fromMap(record, inputSchema))
       val finalOutput = output.filter(filter)
       if (outputColumns.isEmpty) {
@@ -101,7 +119,7 @@ class PmmlModel(val model: Model) extends PredictModel {
             tensor(i) = series(i).getLong(j)
             i += 1
           }
-          tensor
+          if (rawOutput) DataUtils.convertToByteArray(tensor) else tensor
         case _: NumericType =>
           val tensor = Array.ofDim[Double](size)
           var i = 0
@@ -109,7 +127,7 @@ class PmmlModel(val model: Model) extends PredictModel {
             tensor(i) = series(i).getDouble(j)
             i += 1
           }
-          tensor
+          if (rawOutput) DataUtils.convertToByteArray(tensor) else tensor
         case BooleanType =>
           val tensor = Array.ofDim[Boolean](size)
           var i = 0
@@ -117,7 +135,7 @@ class PmmlModel(val model: Model) extends PredictModel {
             tensor(i) = series(i).getBoolean(j)
             i += 1
           }
-          tensor
+          if (rawOutput) DataUtils.convertToByteArray(tensor) else tensor
         case _ =>
           val tensor = Array.ofDim[String](size)
           var i = 0
@@ -128,14 +146,14 @@ class PmmlModel(val model: Model) extends PredictModel {
           tensor
       }
       outputs += ResponseOutput(name=outputColumns(j),
-        shape=Array(size),
+        shape=Seq(size),
         datatype=Utils.dataTypeV1ToV2(dataType.toString),
         parameters=None,
         data=data)
       j += 1
     }
 
-    InferenceResponse(id=request.id, parameters=None, outputs=outputs.result())
+    InferenceResponse(id=request.id, parameters=request.parameters, outputs=outputs.result())
   }
 
   override def `type`(): String = "PMML"

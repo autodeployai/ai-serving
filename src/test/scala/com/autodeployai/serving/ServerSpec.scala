@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2025 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import com.autodeployai.serving.errors.Error
 
 class ServerSpec extends BaseHttpSpec {
 
-  "The HTTP service" should {
+  "The Sever HTTP service" should {
 
     "return an OK status response for GET requests to /up" in {
       Get("/up") ~> route ~> check {

@@ -25,13 +25,12 @@ class PmmlHttpSpec extends BaseHttpSpec {
 
   // The model is from http://dmg.org/pmml/pmml_examples/KNIME_PMML_4.1_Examples/single_iris_dectree.xml
 
-  "The HTTP service" should {
+  "The HTTP service of serving PMML" should {
 
     "return a validation response for POST requests to /v1/validate" in {
       val path = getResource("single_iris_dectree.xml")
       Post("/v1/validate", HttpEntity.fromPath(`text/xml(UTF-8)`, path)) ~> route ~> check {
         status shouldEqual StatusCodes.OK
-        val modelInfo = responseAs[ModelInfo]
         responseAs[ModelInfo] shouldBe loadJson[ModelInfo](getResource("single_iris_dectree.json"))
       }
     }

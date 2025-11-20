@@ -16,13 +16,20 @@
 
 package com.autodeployai.serving.utils
 
+import ai.onnxruntime.platform.Fp16Conversions
+import com.autodeployai.serving.model.DataType
+import com.autodeployai.serving.model.DataType.DataType
+import com.google.protobuf.ByteString
+
 import java.io.ByteArrayOutputStream
-import java.nio.ByteBuffer
+import java.nio.{ByteBuffer, ByteOrder, DoubleBuffer, FloatBuffer, IntBuffer, LongBuffer, ShortBuffer}
 import java.nio.charset.StandardCharsets
 import scala.collection.mutable
 import scala.util.Try
 
 object DataUtils {
+  val TRUE_BYTE: Byte = 1.toByte
+  val FALSE_BYTE: Byte = 0.toByte
 
   def anyToFloat(value: Any): Float = value match {
     case d: Number => d.floatValue
@@ -78,7 +85,7 @@ object DataUtils {
     builder.result()
   }
 
-  def writeBinaryString(array: Array[String]): ByteBuffer = {
+  def writeBinaryString(array: Array[String]): ByteString = {
     val buffer = new ByteArrayOutputStream()
     val len = array.length
     var i = 0
@@ -101,8 +108,98 @@ object DataUtils {
 
       i += 1
     }
-    ByteBuffer.wrap(buffer.toByteArray).asReadOnlyBuffer()
+    ByteString.copyFrom(buffer.toByteArray)
   }
 
+  def convertToByteArray(array: Array[Double]): Array[Byte] = {
+    val byteBuffer = ByteBuffer.allocate(array.length * java.lang.Double.BYTES)
+    byteBuffer.order(ByteOrder.nativeOrder)
 
+    var i = 0
+    while (i < array.length) {
+      byteBuffer.putDouble(array(i))
+      i += 1
+    }
+    byteBuffer.array
+  }
+
+  def convertToByteArray(array: Array[Boolean]): Array[Byte] = {
+    val byteArray = new Array[Byte](array.length)
+
+    var i = 0
+    while (i < array.length) {
+      byteArray(i) = if (array(i)) TRUE_BYTE else FALSE_BYTE
+      i += 1
+    }
+    byteArray
+  }
+
+  def convertToByteArray(array: Array[Long]): Array[Byte] = {
+    val byteBuffer = ByteBuffer.allocate(array.length * java.lang.Long.BYTES)
+    byteBuffer.order(ByteOrder.nativeOrder)
+
+    var i = 0
+    while (i < array.length) {
+      byteBuffer.putLong(array(i))
+      i += 1
+    }
+    byteBuffer.array
+  }
+
+  def convertToBooleanArray(array: Array[Byte]): Array[Boolean] = {
+    val result = new Array[Boolean](array.length)
+    var i = 0
+
+    while (i < array.length) {
+      result(i) = if (array(i) != FALSE_BYTE) true else false
+      i += 1
+    }
+    result
+  }
+
+  def convertToArray(buffer: ByteBuffer, datatype: DataType): Array[_] = datatype match {
+    case DataType.FP32 =>
+      val buf = buffer.asFloatBuffer()
+      val output = FloatBuffer.allocate(buf.capacity)
+      output.put(buf)
+      output.rewind
+      output.array()
+    case DataType.FP64 =>
+      val buf = buffer.asDoubleBuffer()
+      val output = DoubleBuffer.allocate(buf.capacity)
+      output.put(buf)
+      output.rewind
+      output.array()
+    case DataType.INT64 | DataType.UINT64 =>
+      val buf = buffer.asLongBuffer()
+      val output = LongBuffer.allocate(buf.capacity)
+      output.put(buf)
+      output.rewind
+      output.array()
+    case DataType.INT32 | DataType.UINT32 =>
+      val buf = buffer.asIntBuffer()
+      val output = IntBuffer.allocate(buf.capacity)
+      output.put(buf)
+      output.rewind
+      output.array()
+    case DataType.INT16 | DataType.UINT16 =>
+      val buf = buffer.asShortBuffer()
+      val output = ShortBuffer.allocate(buf.capacity)
+      output.put(buf)
+      output.rewind
+      output.array()
+    case DataType.INT8 | DataType.UINT8   =>
+      val output = ByteBuffer.allocate(buffer.capacity).order(ByteOrder.nativeOrder)
+      output.put(buffer)
+      output.rewind
+      buffer.array()
+    case DataType.BOOL  =>
+      DataUtils.convertToBooleanArray(buffer.array())
+    case DataType.BYTES =>
+      DataUtils.readBinaryString(buffer)
+    case DataType.FP16  =>
+      Fp16Conversions.convertFp16BufferToFloatBuffer(buffer.asShortBuffer()).array()
+    case DataType.BF16  =>
+      Fp16Conversions.convertBf16BufferToFloatBuffer(buffer.asShortBuffer()).array()
+  }
 }

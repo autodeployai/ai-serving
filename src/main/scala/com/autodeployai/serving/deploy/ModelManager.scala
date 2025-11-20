@@ -159,46 +159,58 @@ object ModelManager extends JsonSupport {
   def deploy(path: Path, modelType: String, modelName: String)(implicit ec: ExecutionContext): Future[DeployResponse] = Future {
     val model = PredictModel.load(path, modelType)
 
-    // create "models" dir if not exists
-    if (Files.notExists(modelsPath)) {
-      Files.createDirectories(modelsPath)
+    try {
+      // create "models" dir if not exists
+      if (Files.notExists(modelsPath)) {
+        Files.createDirectories(modelsPath)
+      }
+
+      // check if a new model
+      val modelPath = modelsPath.resolve(modelName)
+      val modelMetadataPath = modelPath.resolve(MODEL_METADATA_FILE)
+      val isNewModel = Files.notExists(modelMetadataPath)
+      val modelMetadata = if (isNewModel) {
+        ModelMetadata(modelName)
+      } else {
+        loadModelMetadata(modelPath).map(x => x.withUpdateAt().withLatestVersion()).getOrElse(ModelMetadata(modelName))
+      }
+
+      // create "modelName" dir if not exists
+      if (Files.notExists(modelPath)) {
+        Files.createDirectory(modelPath)
+      }
+
+      // create or update model metadata
+      saveJson(modelMetadataPath, modelMetadata)
+
+      // create version metadata
+      val modelVersion = modelMetadata.latestStrVersion
+      val versionPath = modelPath.resolve(modelVersion)
+      val versionMetadataPath = versionPath.resolve(MODEL_VERSION_METADATA_FILE)
+      val versionMetadata = model.toModelInfo.copy(
+        version = Some(ModelVersion(modelVersion)),
+        hash = Utils.md5Hash(path),
+        size = Utils.fileSize(path)
+      )
+      Files.createDirectory(versionPath)
+      saveJson(versionMetadataPath, versionMetadata)
+
+      // create model file with a proper extension
+      val modelFilePath = versionPath.resolve(getModelFile(modelType))
+      Files.copy(path, modelFilePath)
+
+      // Put it back to the cache
+      val modelCache = modelPool.getOrElseUpdate(modelName, {
+        new ModelCache(modelName, Option(modelVersion))
+      })
+      modelCache.put(modelVersion, model)
+
+      DeployResponse(modelName, modelVersion)
+    } catch {
+      case ex: Throwable =>
+        Utils.safeClose(model)
+        throw ex
     }
-
-    // check if a new model
-    val modelPath = modelsPath.resolve(modelName)
-    val modelMetadataPath = modelPath.resolve(MODEL_METADATA_FILE)
-    val isNewModel = Files.notExists(modelMetadataPath)
-    val modelMetadata = if (isNewModel) {
-      ModelMetadata(modelName)
-    } else {
-      loadModelMetadata(modelPath).map(x => x.withUpdateAt().withLatestVersion()).getOrElse(ModelMetadata(modelName))
-    }
-
-    // create "model" dir if not exists
-    if (Files.notExists(modelPath)) {
-      Files.createDirectory(modelPath)
-    }
-
-    // create or update model metadata
-    saveJson(modelMetadataPath, modelMetadata)
-
-    // create version metadata
-    val modelVersion = modelMetadata.latestStrVersion
-    val versionPath = modelPath.resolve(modelVersion)
-    val versionMetadataPath = versionPath.resolve(MODEL_VERSION_METADATA_FILE)
-    val versionMetadata = model.toModelInfo.copy(
-      version = Some(ModelVersion(modelVersion)),
-      hash = Utils.md5Hash(path),
-      size = Utils.fileSize(path)
-    )
-    Files.createDirectory(versionPath)
-    saveJson(versionMetadataPath, versionMetadata)
-
-    // create model file with a proper extension
-    val modelFilePath = versionPath.resolve(getModelFile(modelType))
-    Files.copy(path, modelFilePath)
-
-    DeployResponse(modelName, modelVersion)
   }
 
   /**

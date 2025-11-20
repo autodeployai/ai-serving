@@ -34,7 +34,7 @@ class OnnxHttpSpec extends BaseHttpSpec {
   // NOTE: Test cases are disabled by default because users need to configure libraries of Onnx Runtime before running them
   // You can remove the Ignore annotation above the test Class to free all them all
 
-  "The HTTP service" should {
+  "The HTTP service of serving ONNX" should {
 
     "return a validation response for POST requests to /v1/validate" in {
       val path = getResource("mnist.onnx")

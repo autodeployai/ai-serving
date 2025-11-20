@@ -198,4 +198,4 @@ case class ModelMetadataV2(name: String,
  */
 case class ServerMetadataResponse(name: String,
                                   version: String,
-                                  extensions: Seq[String])
+                                  extensions: Seq[String] = Seq.empty)
