@@ -244,7 +244,7 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
               }
             }
             outputs += ResponseOutput(name=entry.getKey,
-              shape=info.getShape,
+              shape=ArraySeq.unsafeWrapArray(info.getShape),
               datatype=mapOnnxJavaType(info.`type`),
               parameters=None,
               data=data

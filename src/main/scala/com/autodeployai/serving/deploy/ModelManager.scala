@@ -77,8 +77,6 @@ object ModelManager extends JsonSupport {
     val modelName = modelPath.getFileName.toString
     val result = new ModelCache(modelName)
 
-    log.info(s"Loading model: ${modelName}")
-
     val versions = ArrayBuffer.empty[String]
     val files = Files.list(modelPath)
     val it = files.iterator()
@@ -90,6 +88,7 @@ object ModelManager extends JsonSupport {
         val (modelObjectPath, modelType) = getModelObjectPath(path)
         if (modelObjectPath != null) {
           try {
+            log.info(s"Loading model: ${modelName} with the version ${version}")
             val model = PredictModel.load(modelObjectPath, modelType)
             result.put(version, model)
           } catch {

@@ -24,6 +24,8 @@ import com.autodeployai.serving.errors.{InvalidInputDataException, InvalidInputE
 import com.autodeployai.serving.utils.{JsonUtils, Utils}
 import spray.json._
 
+import scala.collection.compat.immutable.ArraySeq
+
 trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
 
   implicit object TimestampFormat extends RootJsonFormat[Timestamp] {
@@ -145,7 +147,7 @@ trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
             }
 
             if (count != length) {
-              throw InvalidInputException(name, shape, count)
+              throw InvalidInputException(name, ArraySeq.unsafeWrapArray(shape), count)
             }
             buffer
           case _ => InvalidInputDataException(name)
@@ -153,7 +155,7 @@ trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
 
         RequestInput(
           name = name,
-          shape = shape,
+          shape = ArraySeq.unsafeWrapArray(shape),
           datatype = datatype,
           parameters = fields.get("parameters").map(_.convertTo[Map[String, Any]]),
           data = data)
