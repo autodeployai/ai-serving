@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024 AutoDeployAI
+ * Copyright (c) 2019-2025 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,9 @@ package com.autodeployai.serving.http
 
 import com.autodeployai.serving.errors.ErrorHandler.{defaultExceptionHandler, defaultRejectionHandler}
 import com.autodeployai.serving.protobuf.{fromPb, toPb, PredictRequest => PbPredictRequest}
-import akka.event.Logging.LogLevel
-import akka.event.{Logging, LoggingAdapter}
-import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpRequest, HttpResponse, StatusCodes}
+import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpResponse, StatusCodes}
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.server.RouteResult.{Complete, Rejected}
-import akka.http.scaladsl.server.directives.{DebuggingDirectives, LogEntry, LoggingMagnet}
-import akka.http.scaladsl.server.{Route, RouteResult}
+import akka.http.scaladsl.server.Route
 import akka.stream.scaladsl.FileIO
 import akka.util.ByteString
 import com.autodeployai.serving.deploy.ModelManager
@@ -34,31 +30,7 @@ import com.autodeployai.serving.utils.Utils
 
 import scala.concurrent.{ExecutionContext, Future}
 
-trait Endpoints extends JsonSupport {
-
-  private def akkaResponseTimeLoggingFunction(loggingAdapter: LoggingAdapter,
-                                              requestTimestamp: Long,
-                                              level: LogLevel = Logging.InfoLevel)(req: HttpRequest)(res: RouteResult): Unit = {
-    val entry = res match {
-      case Complete(resp) =>
-        val responseTimestamp: Long = System.nanoTime
-        val elapsedTime: Long = (responseTimestamp - requestTimestamp) / 1000000
-        val loggingString = s"""Logged request - "${req.method.value} ${req.uri.path} ${req.protocol.value}" ${resp.status} $elapsedTime(ms)"""
-        LogEntry(loggingString, level)
-      case Rejected(reason) =>
-        LogEntry(s"Rejected reason: ${reason.mkString(", ")}", level)
-    }
-    entry.logTo(loggingAdapter)
-  }
-
-  private def printResponseTime(log: LoggingAdapter) = {
-    val requestTimestamp = System.nanoTime
-    akkaResponseTimeLoggingFunction(log, requestTimestamp)_
-  }
-
-  private val logResponseTime = DebuggingDirectives.logRequestResult(LoggingMagnet(printResponseTime))
-
-
+trait Endpoints extends JsonSupport with HttpSupport {
   def up(): Route = path("up") {
     complete(HttpResponse(
       status = StatusCodes.OK,
@@ -79,7 +51,7 @@ trait Endpoints extends JsonSupport {
                     val validatedFut = uploadedFut.flatMap(_ => {
                       val modelType = Utils.inferModelType(dest, contentType = Some(entity.contentType))
                       ModelManager.validate(dest, modelType)
-                    }).transform { case result =>
+                    }).transform { result =>
                       Utils.safeDelete(dest)
                       result
                     }
@@ -123,7 +95,7 @@ trait Endpoints extends JsonSupport {
                     val deployedFut = uploadedFut.flatMap(_ => {
                       val modelType = Utils.inferModelType(dest, contentType = Some(entity.contentType))
                       ModelManager.deploy(dest, modelType, modelName)
-                    }).transform { case result =>
+                    }).transform { result =>
                       Utils.safeDelete(dest)
                       result
                     }
@@ -154,7 +126,7 @@ trait Endpoints extends JsonSupport {
     }
   }
 
-  def modelVersionV1()(implicit ec: ExecutionContext): Route = path("v1" / "models" / Segment / "versions" / IntNumber) {
+  def modelVersionV1()(implicit ec: ExecutionContext): Route = path("v1" / "models" / Segment / "versions" / Segment) {
     (modelName, modelVersion) =>
       logResponseTime {
         handleExceptions(defaultExceptionHandler) {
@@ -171,8 +143,7 @@ trait Endpoints extends JsonSupport {
       }
   }
 
-
-  def predict(modelName: String, modelVersion: Option[Int] = None)(implicit ec: ExecutionContext): Route = {
+  private def predict(modelName: String, modelVersion: Option[String] = None)(implicit ec: ExecutionContext): Route = {
     extractRequestContext { ctx =>
       import ctx.materializer
       requestEntityPresent {
@@ -180,21 +151,20 @@ trait Endpoints extends JsonSupport {
           case Some(value) => value.mediaType.value match {
             case "application/json" => {
               entity(as[PredictRequest]) { payload =>
-                val predictedFut = ModelManager.predict(payload, modelName, modelVersion)
+                val predictedFut = ModelManager.predict(payload, modelName, modelVersion, grpc = false)
 
                 onSuccess(predictedFut) { result =>
                   complete(result)
                 }
               }
             }
-            case "application/vnd.google.protobuf" | "application/x-protobuf" | "application/octet-stream"
-                                    => {
+            case "application/vnd.google.protobuf" | "application/x-protobuf" | "application/octet-stream"  =>
               extractDataBytes { data =>
                 val bytesFut: Future[ByteString] = data.runFold(ByteString.empty) { case (acc, b) => acc ++ b }
                 val predictedPbFut = bytesFut.flatMap { bytes =>
                   val pbRequest = PbPredictRequest.parseFrom(bytes.toArray)
                   val payload = fromPb(pbRequest)
-                  ModelManager.predict(payload, modelName, modelVersion).map(x => {
+                  ModelManager.predict(payload, modelName, modelVersion, grpc = false).map(x => {
                     toPb(x).copy(modelSpec = pbRequest.modelSpec).toByteArray
                   })
                 }
@@ -204,10 +174,9 @@ trait Endpoints extends JsonSupport {
                     status = StatusCodes.OK,
                     entity = HttpEntity(result)))
                 }
-              }
             }
             case other              =>
-              throw new UnknownContentTypeException(Utils.toOption(other))
+              throw UnknownContentTypeException(Utils.toOption(other))
 
           }
           case _           => throw UnknownContentTypeException()

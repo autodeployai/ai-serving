@@ -22,4 +22,4 @@ package com.autodeployai.serving.model
  * @param name    The specified servable name
  * @param version The deployed version starts from 1
  */
-case class DeployResponse(name: String, version: Int)
+case class DeployResponse(name: String, version: String)

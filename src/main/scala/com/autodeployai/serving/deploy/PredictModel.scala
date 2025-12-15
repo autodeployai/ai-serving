@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024 AutoDeployAI
+ * Copyright (c) 2019-2025 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +19,25 @@ package com.autodeployai.serving.deploy
 import java.nio.file.Path
 import com.autodeployai.serving.utils.Utils.toOption
 import com.autodeployai.serving.errors.ModelTypeNotSupportedException
-import com.autodeployai.serving.model.{Field, ModelInfo, PredictRequest, PredictResponse}
+import com.autodeployai.serving.model.{Field, InferenceRequest, InferenceResponse, ModelInfo, PredictRequest, PredictResponse}
 
-
+/**
+ * Predictable model supporting `predict`
+ */
 trait Predictable {
-  def predict(payload: PredictRequest): PredictResponse
+  /**
+   *  Predicting API v1
+   * @param request
+   * @return
+   */
+  def predict(request: PredictRequest, grpc: Boolean): PredictResponse
+
+  /**
+   * Predicting API v2
+   * @param request
+   * @return
+   */
+  def predict(request: InferenceRequest, grpc: Boolean): InferenceResponse
 }
 
 trait ModelLoader {
@@ -83,9 +97,7 @@ object PredictModel {
   def load(path: Path, modelType: String): PredictModel = modelType match {
     case "PMML" => PmmlModel.load(path)
     case "ONNX" => OnnxModel.load(path)
-    case _      => {
-      throw ModelTypeNotSupportedException(toOption(modelType))
-    }
+    case _      => throw ModelTypeNotSupportedException(toOption(modelType))
   }
 }
 

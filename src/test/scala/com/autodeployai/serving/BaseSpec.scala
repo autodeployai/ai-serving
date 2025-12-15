@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2025 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.testkit.RouteTestTimeout
 import akka.testkit._
 import com.autodeployai.serving.model.JsonSupport
+import com.autodeployai.serving.protobuf.TensorProto
 import org.scalactic.TolerantNumerics
 import org.scalatest.{Matchers, WordSpec}
 
@@ -42,7 +43,7 @@ abstract class BaseSpec extends WordSpec
   }
 
   def getFloatTensor(name: String): Seq[Float] = {
-    val outputTensor = onnx.TensorProto.parseFrom(Files.readAllBytes(getResource(name)))
+    val outputTensor = TensorProto.parseFrom(Files.readAllBytes(getResource(name)))
     val buf = outputTensor.rawData.asReadOnlyByteBuffer().order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
     val arr = Array.ofDim[Float](buf.capacity())
     buf.get(arr)

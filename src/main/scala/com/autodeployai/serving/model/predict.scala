@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024 AutoDeployAI
+ * Copyright (c) 2019-2025 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,3 +44,94 @@ case class PredictRequest(X: RecordSpec, filter: Option[Seq[String]] = None)
  * @param result Output result
  */
 case class PredictResponse(result: RecordSpec)
+
+/**
+ * A request input contains a tensor with specified shape
+ * @param name
+ * @param shape
+ * @param datatype
+ * @param parameters
+ * @param data
+ */
+case class RequestInput(name: String,
+                        shape: Seq[Long],
+                        datatype: String,
+                        data: Any,
+                        parameters: Option[Map[String, Any]] = None)
+
+/**
+ * Contains a request output expected by client
+ * @param name
+ * @param parameters
+ */
+case class RequestOutput(name: String,
+                         parameters: Option[Map[String, Any]] = None)
+
+/**
+ * An inference request that contains all required inputs.
+ * @param id
+ * @param parameters
+ * @param inputs
+ * @param outputs
+ */
+case class InferenceRequest(id: Option[String] = None,
+                            parameters: Option[Map[String, Any]] = None,
+                            inputs: Seq[RequestInput] = Seq.empty,
+                            outputs: Option[Seq[RequestOutput]] = None)
+
+/**
+ * A response output contains a tensor with specified shape
+ * @param name
+ * @param shape
+ * @param datatype
+ * @param parameters
+ * @param data  An array of values or a single scalar
+ */
+case class ResponseOutput(name: String,
+                          shape: Seq[Long],
+                          datatype: String,
+                          data: Any,
+                          parameters: Option[Map[String, Any]] = None
+                          ) {
+
+  def dataToSeq: ResponseOutput = ResponseOutput(
+    name = this.name,
+    shape = this.shape,
+    datatype = this.datatype,
+    data = this.data match {
+      case a: Array[_] => a.toSeq
+      case _ => this.data
+    },
+    parameters = this.parameters
+  )
+}
+
+/**
+ * An inference response with all expected outputs
+ * @param model_name
+ * @param model_version
+ * @param id
+ * @param parameters
+ * @param outputs
+ */
+case class InferenceResponse(model_name: String = "",
+                             model_version: Option[String] = None,
+                             id: Option[String] = None,
+                             parameters: Option[Map[String, Any]] = None,
+                             outputs: Seq[ResponseOutput] = Seq.empty) {
+
+  def withModelSpec(name: String, version: Option[String]): InferenceResponse =
+    InferenceResponse(model_name = name,
+      model_version = version,
+      id = this.id,
+      parameters = this.parameters,
+      outputs = this.outputs)
+
+  def dataToSeq: InferenceResponse = InferenceResponse(
+    model_name = this.model_name,
+    model_version = this.model_version,
+    id = this.id,
+    parameters = this.parameters,
+    outputs = this.outputs.map(x => x.dataToSeq)
+  )
+}

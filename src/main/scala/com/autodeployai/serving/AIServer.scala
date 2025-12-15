@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024 AutoDeployAI
+ * Copyright (c) 2019-2025 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,44 +21,52 @@ import akka.dispatch.MessageDispatcher
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
-import com.autodeployai.serving.http.Endpoints
+import com.autodeployai.serving.deploy.ModelManager
+import com.autodeployai.serving.http.{Endpoints, EndpointsV2}
 import com.autodeployai.serving.protobuf.GrpcServer
-import com.typesafe.config.{Config, ConfigFactory}
+import com.autodeployai.serving.utils.Utils
+import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import org.slf4j.{Logger, LoggerFactory}
 
-object AIServer extends Endpoints {
+object AIServer extends Endpoints with EndpointsV2 {
   val log: Logger = LoggerFactory.getLogger(this.getClass)
 
-  val config: Config = ConfigFactory.load()
+  var config: Config = ConfigFactory.load()
+  private val defaultFixedPoolSizePath = "akka.ai-dispatcher.thread-pool-executor.fixed-pool-size"
+  if (config.hasPath(defaultFixedPoolSizePath)) {
+    var numCores = config.getInt(defaultFixedPoolSizePath)
+    if (numCores == -1) {
+      numCores = Utils.getNumCores
+    }
+    config = config.withValue(defaultFixedPoolSizePath, ConfigValueFactory.fromAnyRef(numCores))
+    log.info(s"The fixed thread pool size ${numCores} being configured for processing requests")
+  }
 
   implicit val system: ActorSystem = ActorSystem("AI-Serving", config)
   implicit val executionContext: MessageDispatcher = system.dispatchers.lookup("akka.ai-dispatcher")
 
-  // Print all configurations of dispatcher.
-  log.info(s"Configurations of ai-dispatcher: " +  s"${
-    val result = new StringBuilder()
-    val entries = executionContext.configurator.config.entrySet()
-    val it = entries.iterator()
-    while (it.hasNext) {
-      val entry = it.next()
-      result.append(s"\n${entry.getKey}: ${entry.getValue.render()}");
-    }
-    result}")
-
-  lazy val route: Route = up() ~ validate() ~ modelsV1() ~ modelV1() ~ modelVersionV1()
+  lazy val route: Route = up() ~ validate() ~ modelsV1() ~ modelV1() ~ modelVersionV1() ~
+    healthLiveV2() ~ healthReadyV2() ~ modelReadyV2() ~ modelVersionReadyV2() ~ serverV2() ~ modelMetadataV2() ~ modelVersionMetadataV2() ~
+    modelInferV2() ~ modelVersionInferV2()
 
   def start(args: Array[String]): Unit = {
+
+    // load all models into memory
+    ModelManager.loadModels()
+    log.info(ModelManager.summaries)
 
     val host = config.getString("service.http.interface")
     val httpPort = config.getInt("service.http.port")
     val grpcPort = config.getInt("service.grpc.port")
+
+    log.info(s"AI-Serving details: ${serverMetadataResponseFormat.write(Utils.getServerMetadata).toString()}")
 
     // start grpc server
     val grpcServer = new GrpcServer(executionContext, grpcPort)
     grpcServer.start()
 
     // start akka http server
-    val bindingFuture = Http().bindAndHandle(route, host, httpPort)
+    val bindingFuture = Http().newServerAt(host, httpPort).bindFlow(route)
     log.info(s"AI-Serving http server started, listening on http://${host}:${httpPort}/")
 
     grpcServer.blockUntilShutdown()
@@ -66,7 +74,6 @@ object AIServer extends Endpoints {
       .flatMap(_.unbind())
       .onComplete(_ => system.terminate())
   }
-
 }
 
 object AIServerApp extends App {

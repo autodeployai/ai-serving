@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024 AutoDeployAI
+ * Copyright (c) 2019-2025 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,18 +17,19 @@
 package com.autodeployai.serving
 
 import java.nio.{ByteBuffer, ByteOrder}
-import com.autodeployai.serving.errors.{BaseException, ModelNotFoundException, OnnxRuntimeLibraryNotFoundError}
+import com.autodeployai.serving.errors.BaseException
 import protobuf.Value.Kind
-import com.autodeployai.serving.utils.Utils
+import com.autodeployai.serving.utils.{DataUtils, Utils}
 import com.google.protobuf.ByteString
 import com.google.protobuf.timestamp.Timestamp
-import io.grpc.{Status, StatusRuntimeException}
+import inference.{InferParameter, ModelInferRequest, ModelInferResponse, ModelMetadataResponse, ServerMetadataResponse}
 import protobuf.TensorProto.DataType._
 
+import java.nio.charset.StandardCharsets
+import scala.collection.immutable.ArraySeq
 import scala.jdk.CollectionConverters._
 
 package object protobuf {
-
   implicit class ModelInfoImplicitClass(m: model.ModelInfo) {
     def toPb: ModelInfo = protobuf.toPb(m)
   }
@@ -56,7 +57,7 @@ package object protobuf {
     algorithm = off(m.algorithm),
     functionName = off(m.functionName),
     description = off(m.description),
-    version = m.version,
+    version = m.version.map(_.version).getOrElse(""),
     formatVersion = off(m.formatVersion),
     hash = off(m.hash),
     size = m.size.getOrElse(0),
@@ -80,22 +81,8 @@ package object protobuf {
 
   def off(o: Option[String]): String = o.getOrElse("")
 
-  def toPb(ex: Throwable): StatusRuntimeException = ex match {
-    case bex: BaseException => {
-      val status = bex match {
-        case _: ModelNotFoundException          => Status.NOT_FOUND
-        case _: OnnxRuntimeLibraryNotFoundError => Status.INTERNAL
-        case _                                  => Status.INVALID_ARGUMENT
-      }
-      new StatusRuntimeException(status.withDescription(bex.message))
-    }
-    case _                  => {
-      new StatusRuntimeException(Status.INTERNAL.withDescription(ex.getMessage))
-    }
-  }
-
   def toPb(r: model.DeployResponse): DeployResponse = DeployResponse(
-    Some(ModelSpec(r.name, Some(r.version)))
+    Some(ModelSpec(r.name, r.version))
   )
 
   def toPb(m: model.ModelMetadata): ModelMetadata = ModelMetadata(
@@ -103,7 +90,7 @@ package object protobuf {
     name = m.name,
     createdAt = Some(Timestamp(m.createdAt.getTime)),
     updateAt = Some(Timestamp(m.updateAt.getTime)),
-    latestVersion = m.latestVersion,
+    latestVersion = m.latestVersion.version,
     versions = m.versions.map(versions => versions.map(toPb)).getOrElse(Nil)
   )
 
@@ -116,6 +103,126 @@ package object protobuf {
   def toPb(r: model.PredictResponse): PredictResponse = PredictResponse(
     result = Some(toPb(r.result))
   )
+
+  def toPb(r: model.ServerMetadataResponse): ServerMetadataResponse = ServerMetadataResponse(
+    name = r.name,
+    version = r.version,
+    extensions = r.extensions
+  )
+
+  def toPb(r: model.MetadataTensor): ModelMetadataResponse.TensorMetadata = ModelMetadataResponse.TensorMetadata(
+    name = r.name,
+    datatype = r.datatype,
+    shape = r.shape
+  )
+
+  def toPb(r: model.ModelMetadataV2): ModelMetadataResponse = ModelMetadataResponse(
+    name = r.name,
+    versions = r.versions,
+    platform = r.platform,
+    inputs = r.inputs.map(toPb),
+    outputs = r.outputs.map(toPb)
+  )
+
+  def toPb(r: model.InferenceResponse): ModelInferResponse =  {
+    val (outputs, rawOutputContents: Seq[ByteString]) = if (isRawOutput(r)) {
+      val contents: Seq[ByteString]  = r.outputs.map(x => x.data match {
+        case a: Array[Byte]   => ByteString.copyFrom(a);
+        case a: Array[String] => DataUtils.writeBinaryString(a)
+        case b => throw new BaseException(s"Unexpected output value: $b")
+      })
+      (r.outputs.map(x => toPb(x, output_raw = true)), contents)
+    } else {
+      (r.outputs.map(x => toPb(x, output_raw = false)), Seq.empty)
+    }
+
+    ModelInferResponse(
+      modelName = r.model_name,
+      modelVersion = r.model_version.getOrElse(""),
+      id = r.id.getOrElse(""),
+      parameters = toPb(r.parameters),
+      outputs = outputs,
+      rawOutputContents = rawOutputContents
+    )
+  }
+
+  def isRawOutput(r: model.InferenceResponse): Boolean = {
+    val rawOutput = r.parameters.flatMap(x => x.get("raw_output")).getOrElse(false).asInstanceOf[Boolean]
+    if (!rawOutput) r.outputs.exists(x => x.datatype == "FP16" || x.datatype =="BF16" ) else true
+  }
+
+  def toPb(r: model.ResponseOutput, output_raw: Boolean): ModelInferResponse.InferOutputTensor = {
+    ModelInferResponse.InferOutputTensor(
+      name = r.name,
+      datatype =  r.datatype,
+      shape = r.shape,
+      parameters = toPb(r.parameters),
+      contents = if (output_raw) None else Option(any2Tensor(r.data, r.datatype))
+    )
+  }
+
+  def any2Tensor(r: Any, datatype: String): inference.InferTensorContents = datatype match {
+    case "BOOL" =>
+      r match {
+        case a: Array[Byte] =>
+          inference.InferTensorContents(boolContents=ArraySeq.unsafeWrapArray(a.map(x => x != 0)))
+      }
+    case "UINT8" =>
+      r match {
+        case a: Array[Byte] =>
+          inference.InferTensorContents(uintContents=ArraySeq.unsafeWrapArray(a.map(_.toInt)))
+      }
+    case "INT8" =>
+      r match {
+        case a: Array[Byte] =>
+          inference.InferTensorContents(intContents=ArraySeq.unsafeWrapArray(a.map(_.toInt)))
+      }
+    case "INT16" | "UINT16" =>
+      r match {
+        case a: Array[Short] =>
+          inference.InferTensorContents(intContents=ArraySeq.unsafeWrapArray(a.map(_.toInt)))
+      }
+    case "INT32" | "UINT32" =>
+      r match {
+        case a: Array[Int] =>
+          inference.InferTensorContents(intContents=ArraySeq.unsafeWrapArray(a))
+      }
+    case "INT64" | "UINT64" =>
+      r match {
+        case a: Array[Long] =>
+          inference.InferTensorContents(int64Contents=ArraySeq.unsafeWrapArray(a))
+      }
+    case "FP32" =>
+      r match {
+        case a: Array[Float] =>
+          inference.InferTensorContents(fp32Contents=ArraySeq.unsafeWrapArray(a))
+      }
+    case "FP64" =>
+      r match {
+        case a: Array[Double] =>
+          inference.InferTensorContents(fp64Contents=ArraySeq.unsafeWrapArray(a))
+      }
+    case "BYTES" =>
+      r match {
+        case a: Array[String] =>
+          inference.InferTensorContents(bytesContents=ArraySeq.unsafeWrapArray(a.map(x => ByteString.copyFrom(x, StandardCharsets.UTF_8))))
+      }
+    case "FP16" | "BF16"  =>
+      throw new BaseException(s"The ${datatype} data type must be represented as raw content as there is no specific data type for a 16-bit float type.")
+  }
+
+  def toPb(parameters: Option[Map[String, Any]]): Map[String, inference.InferParameter] = {
+    parameters.map(x => {
+      x.map(pair => {
+        pair._1 -> InferParameter(pair._2 match {
+          case b: Boolean => InferParameter.ParameterChoice.BoolParam(b)
+          case l: Long => InferParameter.ParameterChoice.Int64Param(l)
+          case i: Int => InferParameter.ParameterChoice.Int64Param(i)
+          case _  => InferParameter.ParameterChoice.StringParam(pair._2.toString)
+        })
+      })
+    }).getOrElse(Map.empty)
+  }
 
   private def anyToValue(v: Any): Value = v match {
     case s: String              => Value(Kind.StringValue(s))
@@ -206,7 +313,7 @@ package object protobuf {
     if (!v.rawData.isEmpty) {
       // When this raw_data field is used to store tensor value, elements MUST
       // be stored in as fixed-width, little-endian order.
-      (v.rawData.asReadOnlyByteBuffer().order(ByteOrder.LITTLE_ENDIAN), v.dims)
+      (v.rawData.asReadOnlyByteBuffer().order(ByteOrder.nativeOrder), v.dims)
     } else {
       v.dataType match {
         case FLOAT.index | COMPLEX64.index                                                                    =>
@@ -224,6 +331,88 @@ package object protobuf {
         case _                                                                                                =>
           null
       }
+    }
+  }
+
+  def fromPb(request: ModelInferRequest): model.InferenceRequest = {
+    val rawInputContents = request.rawInputContents
+    val inputs = if (rawInputContents.nonEmpty) {
+      if (rawInputContents.size != request.inputs.size) {
+        throw new BaseException(s"The length of raw_input_contents should be ${request.inputs.size}, but got ${rawInputContents.size}")
+      }
+
+      request.inputs.zip(rawInputContents).map { x =>
+        val tensor = x._1
+        model.RequestInput(
+          name = tensor.name,
+          shape = tensor.shape,
+          datatype = tensor.datatype,
+          parameters = Utils.toOption(tensor.parameters.map(x => x._1 -> fromPb(x._2))),
+          data = x._2.asReadOnlyByteBuffer().order(ByteOrder.nativeOrder)
+        )
+      }
+    } else {
+      request.inputs.map(fromPb)
+    }
+
+    model.InferenceRequest(
+      id = Utils.toOption(request.id),
+      parameters = Utils.toOption(request.parameters.map(x => x._1 -> fromPb(x._2))),
+      inputs = inputs,
+      outputs = Utils.toOption(request.outputs.map(fromPb))
+    )
+  }
+
+  def fromPb(output: ModelInferRequest.InferRequestedOutputTensor): model.RequestOutput = {
+    model.RequestOutput(name = output.name, parameters = Utils.toOption(output.parameters.map(x => x._1 -> fromPb(x._2))))
+  }
+
+  def fromPb(parameter: inference.InferParameter): Any = {
+    val choice = parameter.parameterChoice
+    val result = if (choice.isBoolParam)
+      choice.boolParam
+    else if (choice.isStringParam)
+      choice.stringParam
+    else if (choice.isInt64Param)
+      choice.int64Param
+    else None
+    result.orNull
+  }
+
+  def fromPb(tensor: ModelInferRequest.InferInputTensor): model.RequestInput = {
+    model.RequestInput(
+      name = tensor.name,
+      shape = tensor.shape,
+      datatype = tensor.datatype,
+      parameters = Utils.toOption(tensor.parameters.map(x => x._1 -> fromPb(x._2))),
+      data = tensor.contents.map(fromPb(tensor.datatype, _)).orNull
+    )
+  }
+
+  def fromPb(datatype: String, content: inference.InferTensorContents): Any = {
+    model.DataType.withName(datatype) match {
+      case model.DataType.BOOL =>
+        content.boolContents.toArray
+      case model.DataType.INT32 | model.DataType.INT16 | model.DataType.INT8 =>
+        content.intContents.toArray
+      case model.DataType.INT64 =>
+        content.int64Contents.toArray
+      case model.DataType.UINT32 | model.DataType.UINT16 | model.DataType.UINT8 =>
+        content.uintContents.toArray
+      case model.DataType.UINT64 =>
+        content.uint64Contents.toArray
+      case model.DataType.FP32 =>
+        content.fp32Contents.toArray
+      case model.DataType.FP64 =>
+        content.fp64Contents.toArray
+      case model.DataType.BYTES =>
+        if (content.bytesContents.size == 1) {
+          content.bytesContents.head.asReadOnlyByteBuffer().order(ByteOrder.nativeOrder)
+        } else {
+          ByteString.copyFrom(content.bytesContents.asJava).asReadOnlyByteBuffer().order(ByteOrder.nativeOrder)
+        }
+      case _ =>
+        throw new BaseException(s"The ${datatype} data type must be represented as raw content as there is no specific data type for a 16-bit float type.")
     }
   }
 }

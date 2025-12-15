@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2025 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,22 +18,24 @@ package com.autodeployai.serving
 
 import java.nio.file.Paths
 import protobuf.DeploymentServiceGrpc.DeploymentServiceBlockingStub
-import protobuf.{DeploymentServiceGrpc, DeploymentServiceImpl}
+import protobuf.{DeploymentServiceGrpc, DeploymentServiceImpl, DeploymentServiceImplV2}
 import com.autodeployai.serving.deploy.ModelManager
 import com.autodeployai.serving.utils.Utils
+import inference.GRPCInferenceServiceGrpc
+import inference.GRPCInferenceServiceGrpc.GRPCInferenceServiceBlockingStub
 import io.grpc.inprocess.{InProcessChannelBuilder, InProcessServerBuilder}
 import io.grpc.testing.GrpcCleanupRule
 import org.junit.runner.Description
 import org.junit.runners.model.Statement
 import org.scalatest.Outcome
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 
 abstract class BaseGrpcSpec extends BaseSpec {
 
   var grpcCleanup: GrpcCleanupRule = _
 
-  val executionContext = ExecutionContext.global
+  val executionContext: ExecutionContextExecutor = ExecutionContext.global
 
   override protected def withFixture(test: NoArgTest): Outcome = {
     var outcome: Outcome = null
@@ -60,5 +62,12 @@ abstract class BaseGrpcSpec extends BaseSpec {
     grpcCleanup.register(InProcessServerBuilder
       .forName(serverName).directExecutor().addService(DeploymentServiceGrpc.bindService(new DeploymentServiceImpl, executionContext)).build().start())
     DeploymentServiceGrpc.blockingStub(grpcCleanup.register(InProcessChannelBuilder.forName(serverName).directExecutor().build()))
+  }
+
+  def blockingStubV2(): GRPCInferenceServiceBlockingStub = {
+    val serverName = InProcessServerBuilder.generateName
+    grpcCleanup.register(InProcessServerBuilder
+      .forName(serverName).directExecutor().addService(GRPCInferenceServiceGrpc.bindService(new DeploymentServiceImplV2, executionContext)).build().start())
+    GRPCInferenceServiceGrpc.blockingStub(grpcCleanup.register(InProcessChannelBuilder.forName(serverName).directExecutor().build()))
   }
 }

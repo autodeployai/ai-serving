@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2025 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ class PmmlGrpcSpec extends BaseGrpcSpec {
 
   // The model is from http://dmg.org/pmml/pmml_examples/KNIME_PMML_4.1_Examples/single_iris_dectree.xml
 
-  "The GRPC service" should {
+  "The GRPC service of serving PMML" should {
 
     "return a validation response for calling 'validate'" in {
       val input = getResource("single_iris_dectree.xml")

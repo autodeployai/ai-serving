@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2025 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ package com.autodeployai.serving
 
 import java.nio.file.Files
 import protobuf.Value.Kind
-import protobuf.{ListValue, Record, Value}
+import protobuf.{ListValue, Record, TensorProto, Value}
 import akka.http.scaladsl.model.ContentTypes.{`application/json`, `application/octet-stream`}
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.{HttpEntity, StatusCodes}
@@ -34,7 +34,7 @@ class OnnxHttpSpec extends BaseHttpSpec {
   // NOTE: Test cases are disabled by default because users need to configure libraries of Onnx Runtime before running them
   // You can remove the Ignore annotation above the test Class to free all them all
 
-  "The HTTP service" should {
+  "The HTTP service of serving ONNX" should {
 
     "return a validation response for POST requests to /v1/validate" in {
       val path = getResource("mnist.onnx")
@@ -79,7 +79,7 @@ class OnnxHttpSpec extends BaseHttpSpec {
       val name = "an-onnx-model"
       val deployResponse = deployModel(name, "mnist.onnx", `application/octet-stream`)
 
-      val tensor0 = onnx.TensorProto.parseFrom(Files.readAllBytes(getResource("mnist_input_0.pb")))
+      val tensor0 = TensorProto.parseFrom(Files.readAllBytes(getResource("mnist_input_0.pb")))
       val input1 = protobuf.PredictRequest().withX(
         protobuf.RecordSpec(records = List(Record(Map("Input3" -> Value(Kind.TensorValue(tensor0)))))))
 
@@ -117,9 +117,9 @@ class OnnxHttpSpec extends BaseHttpSpec {
       val name = "an-onnx-model"
       val deployResponse = deployModel(name, "mnist.onnx", `application/octet-stream`)
 
-      val tensor0 = onnx.TensorProto.parseFrom(Files.readAllBytes(getResource("mnist_input_0.pb")))
-      val tensor1 = onnx.TensorProto.parseFrom(Files.readAllBytes(getResource("mnist_input_1.pb")))
-      val tensor2 = onnx.TensorProto.parseFrom(Files.readAllBytes(getResource("mnist_input_2.pb")))
+      val tensor0 = TensorProto.parseFrom(Files.readAllBytes(getResource("mnist_input_0.pb")))
+      val tensor1 = TensorProto.parseFrom(Files.readAllBytes(getResource("mnist_input_1.pb")))
+      val tensor2 = TensorProto.parseFrom(Files.readAllBytes(getResource("mnist_input_2.pb")))
       val input3 = protobuf.PredictRequest().withX(
         protobuf.RecordSpec(columns = Seq("Input3"), data = Seq(
           ListValue(Seq(Value(Kind.TensorValue(tensor0)))),

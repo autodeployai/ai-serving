@@ -18,12 +18,19 @@ Serving AI/ML models in the open standard formats [PMML](http://dmg.org/pmml/v4-
     - [Advanced ONNX Runtime Configuration](#advanced-onnx-runtime-configuration)
         - [Build ONNX Runtime](#build-onnx-runtime)
         - [Load ONNX Runtime](#load-onnx-runtime)
+- [How to deploy and undeploy a PMML or ONNX model in AI-Serving](#how-to-deploy-and-undeploy-a-pmml-or-onnx-model-in-ai-serving)
+  - [Manual Deployment](#manual-deployment)
+  - [Deployment via API](#deployment-via-api)
 - [REST APIs](#rest-apis)
-    - [Validate API](#1-validate-api)
-    - [Deploy API](#2-deploy-api)
-    - [Model Metadata API](#3-model-metadata-api)
-    - [Predict API](#4-predict-api)
+  - [v2 REST APIs](#v2-rest-apis)
+  - [v1 REST APIs](#v1-rest-apis)
+      - [Validate API](#1-validate-api)
+      - [Deploy API](#2-deploy-api)
+      - [Model Metadata API](#3-model-metadata-api)
+      - [Predict API](#4-predict-api)
 - [gRPC APIs](#grpc-apis)
+  - [gRPC predict v2 proto specification](#grpc-predict-v2-proto-specification)
+  - [gRPC predict v1 proto specification](#grpc-predict-v1-proto-specification)
 - [Examples](#examples)
     - [Python](#python)
       - [Serving PMML models with AI-Serving](examples/AIServingIrisXGBoostPMMLModel.ipynb) 
@@ -140,7 +147,45 @@ Please, see [Build Output](https://github.com/microsoft/onnxruntime/tree/master/
   java -Donnxruntime.backend=execution_backend -Donnxruntime.native.onnxruntime4j_jni.path=/path/to/onnxruntime4j_jni -Donnxruntime.native.onnxruntime.path=/path/to/onnxruntime -jar ai-serving-assembly-<version>.jar
   ```
 
+## How to deploy and undeploy a PMML or ONNX model in AI-Serving
+
+There are two ways to deploy a PMML or ONNX model into AI-Serving: manual deployment and deployment via API:
+
+### Manual Deployment
+  To deploy a model manually, follow these steps:
+  1. Locate the directory specified by the `service.home` property.
+  2. Create a subdirectory named `models` if it does not already exist.
+  3. Inside the model name directory, create a subdirectory for the model version (for example, 1, 2, etc.).
+  4. Place the model file into the version directory:
+     - Use the fixed filename `model.pmml` for PMML models.
+     - Use the fixed filename `model.onnx` for ONNX models. 
+  5. All models placed in this directory structure will be automatically loaded when AI-Serving starts.
+
+Refer to the following example for guidance:
+```shell
+/opt/ai-serving
+└── models
+    ├── iris
+    │   └── 1
+    │       └── model.pmml
+    ├── mnist
+    │   ├── 1
+    │   │   ├── model.onnx
+    │   ├── 2
+    │   │   ├── model.onnx
+```
+Undeploying a model is straightforward, simply remove the corresponding model directory or the specific version directory.
+
+### Deployment via API
+To deploy and undeploy a model via the deployment API, refer to the following REST and gRPC APIs for deploying and undeploying models.
+
 ## REST APIs
+
+### v2 REST APIs
+They are fully compatible with [Predict Protocol - Version 2](https://github.com/kserve/kserve/blob/master/docs/predict-api/v2/required_api.md)
+
+### v1 REST APIs
+
 
 - [Validate API](#1-validate-api)
 - [Deploy API](#2-deploy-api)
@@ -397,6 +442,11 @@ The server always return the same type as your request.
 Generally speaking, the binary payload has better latency, especially for the big tensor value for ONNX models, while the JSON format is easy for human readability.
 
 ## gRPC APIs
+
+### gRPC predict v2 proto specification
+Refer to the [grpc_predict_v2.proto](https://github.com/kserve/kserve/blob/master/docs/predict-api/v2/grpc_predict_v2.proto) specification
+
+### gRPC predict v1 proto specification
 Please, refer to the protobuf file [`ai-serving.proto`](src/main/protobuf/ai-serving.proto) for details. You could generate your client and make a gRPC call to it using your favorite language. To learn more about how to generate the client code and call to the server, please refer to [the tutorials of gRPC](https://grpc.io/docs/tutorials/).
 
 ## Examples

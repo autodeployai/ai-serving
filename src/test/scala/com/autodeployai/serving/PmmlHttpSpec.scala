@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 AutoDeployAI
+ * Copyright (c) 2019-2025 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 package com.autodeployai.serving
 
-import com.autodeployai.serving.model._
 import akka.http.scaladsl.model.ContentTypes._
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.{HttpEntity, StatusCodes}
@@ -26,7 +25,7 @@ class PmmlHttpSpec extends BaseHttpSpec {
 
   // The model is from http://dmg.org/pmml/pmml_examples/KNIME_PMML_4.1_Examples/single_iris_dectree.xml
 
-  "The HTTP service" should {
+  "The HTTP service of serving PMML" should {
 
     "return a validation response for POST requests to /v1/validate" in {
       val path = getResource("single_iris_dectree.xml")

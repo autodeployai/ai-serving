@@ -16,17 +16,19 @@
 
 package com.autodeployai.serving.utils
 
-import java.io.BufferedInputStream
+import java.io.{BufferedInputStream, IOException}
 import java.net.URLConnection
 import java.nio.file.{Files, Path}
 import java.security.{DigestInputStream, MessageDigest}
 import java.util.Comparator
 import akka.http.scaladsl.model.ContentType
+import com.autodeployai.serving.model.ServerMetadataResponse
 import org.slf4j.{Logger, LoggerFactory}
 
+import java.util.jar.Attributes.Name
 import scala.annotation.tailrec
 import scala.collection.mutable
-import scala.collection.mutable.{ArrayBuffer}
+import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}
 
@@ -83,6 +85,12 @@ object Utils {
 
   def toOption[T](seq: Seq[T]): Option[Seq[T]] = {
     Option(seq) filterNot {
+      _.isEmpty
+    }
+  }
+
+  def toOption[T, T1](map: Map[T, T1]): Option[Map[T, T1]] = {
+    Option(map) filterNot {
       _.isEmpty
     }
   }
@@ -155,6 +163,11 @@ object Utils {
     shape.filter(x => x != -1).foldLeft(1L)((x, y) => x * y)
   }
 
+  def elementCount(shape: Seq[Long]): Long = {
+    // filter the dynamic axes that take -1
+    shape.filter(x => x != -1).foldLeft(1L)((x, y) => x * y)
+  }
+
   def shapeOfValue(value: Any): Array[Long] = {
     val result: ArrayBuffer[Long] = ArrayBuffer.empty
     dimensionOfValue(value, result)
@@ -164,7 +177,7 @@ object Utils {
   def isDynamicShape(shape: Array[Long]): Boolean = shape.contains(-1L)
 
   @tailrec
-  def dimensionOfValue(value: Any, result: ArrayBuffer[Long]): Unit = value match {
+  private def dimensionOfValue(value: Any, result: ArrayBuffer[Long]): Unit = value match {
     case seq: Seq[_]     => {
       val size = seq.size
       result += size
@@ -213,4 +226,79 @@ object Utils {
     }
   }
 
+  def getNumCores: Int = {
+    Runtime.getRuntime.availableProcessors()
+  }
+
+  def dataTypeV1ToV2(dataType: String): String = dataType match {
+    case "string"         =>
+      "BYTES"
+    case "integer"        =>
+      "INT32"
+    case "float"          =>
+      "FP32"
+    case "double" | "real"=>
+      "FP64"
+    case "boolean"        =>
+      "BOOL"
+    case "date" | "time" | "dateTime" =>
+      "BYTES"
+    case "dateDaysSince[0]" | "dateDaysSince[1960]" | "dateDaysSince[1970]" | "dateDaysSince[1980]" =>
+      "INT64"
+    case "timeSeconds" =>
+      "INT32"
+    case "dateTimeSecondsSince[0]" | "dateTimeSecondsSince[1960]" | "dateTimeSecondsSince[1970]" | "dateTimeSecondsSince[1980]" =>
+      "INT64"
+    case _                =>
+      val unknown = "UNKNOWN"
+      if (dataType.startsWith("tensor")) {
+        val idxLeft = dataType.indexOf('[')
+        val idxRight = dataType.indexOf(']')
+        if (idxLeft != -1 && idxRight != -1) {
+          val tensorType = dataType.substring(idxLeft + 1, idxRight)
+          tensorType match {
+            case "float"    => "FP32"
+            case "double"   => "FP64"
+            case "STRING"   => "BYTES"
+            case "float16"  => "FP16"
+            case "BFLOAT16" => "BF16"
+            case _          => tensorType.toUpperCase()
+          }
+        } else unknown
+      } else if (dataType.startsWith("map")) {
+        "BYTES"
+      } else if (dataType.startsWith("seq")) {
+        "BYTES"
+      } else unknown
+  }
+
+  def getServerMetadata: ServerMetadataResponse = {
+    var name = "ai-serving"
+    var version = "NA"
+    var pmmlVersion = "NA"
+    var onnxruntimeVersion = "NA"
+    try {
+      val pmml4sName = new Name("pmml4s-Version")
+      val resources =  this.getClass.getClassLoader.getResources("META-INF/MANIFEST.MF")
+      var continue = true
+      while (resources.hasMoreElements && continue) {
+        val manifest = new java.util.jar.Manifest(resources.nextElement().openStream())
+        val attr = manifest.getMainAttributes
+        if (attr.containsKey(pmml4sName)) {
+          name = attr.getValue("Implementation-Title")
+          version = attr.getValue("Implementation-Version")
+          pmmlVersion = attr.getValue("pmml4s-Version")
+          onnxruntimeVersion = attr.getValue("onnxruntime-Version")
+          continue = false
+        }
+      }
+    } catch {
+      case _: IOException =>
+    }
+
+    ServerMetadataResponse(
+      name = name,
+      version = version
+    )
+  }
 }
