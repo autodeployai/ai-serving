@@ -25,6 +25,7 @@ import inference.{InferTensorContents, ModelInferRequest, ModelMetadataRequest, 
 
 import java.nio.ByteOrder
 import java.nio.file.Files
+import scala.collection.immutable.ArraySeq
 
 class OnnxGrpcV2Spec extends BaseGrpcSpec {
 
@@ -50,7 +51,7 @@ class OnnxGrpcV2Spec extends BaseGrpcSpec {
         inputs = Seq(
           ModelInferRequest.InferInputTensor(
             name = "Input3", datatype = "FP32", shape = Seq(1, 1, 28, 28), parameters = Map.empty, contents = Some(InferTensorContents(
-              fp32Contents = input0.inputs.head.data.asInstanceOf[Array[Float]]
+              fp32Contents = ArraySeq.unsafeWrapArray(input0.inputs.head.data.asInstanceOf[Array[Float]])
             ))
           )
         ),

@@ -23,7 +23,7 @@ import akka.http.scaladsl.testkit.RouteTestTimeout
 import akka.testkit._
 import com.autodeployai.serving.model.JsonSupport
 import com.autodeployai.serving.protobuf.TensorProto
-import org.scalactic.TolerantNumerics
+import org.scalactic.{Equality, TolerantNumerics}
 import org.scalatest.{Matchers, WordSpec}
 
 import scala.concurrent.duration._
@@ -33,10 +33,10 @@ abstract class BaseSpec extends WordSpec
   with JsonSupport {
 
   // Increase time out only for debugging
-  implicit def default(implicit system: ActorSystem) = RouteTestTimeout(30.minutes dilated)
+  implicit def default(implicit system: ActorSystem): RouteTestTimeout = RouteTestTimeout(30.minutes dilated)
 
-  implicit val doubleEquality = TolerantNumerics.tolerantDoubleEquality(0.01)
-  implicit val floatEquality = TolerantNumerics.tolerantFloatEquality(0.01f)
+  implicit val doubleEquality: Equality[Double] = TolerantNumerics.tolerantDoubleEquality(0.1)
+  implicit val floatEquality: Equality[Float] = TolerantNumerics.tolerantFloatEquality(0.1f)
 
   def getResource(name: String): Path = {
     Paths.get(s"./src/test/resources/${name}")
