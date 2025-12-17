@@ -21,7 +21,7 @@ RUN apt-get update &&\
   libcurl4-openssl-dev \
   libssl-dev \
   libgomp1 \
-  openjdk-11-jdk \
+  openjdk-17-jdk \
   ca-certificates-java
 
 ARG SBT_VERSION=1.6.2
@@ -39,10 +39,10 @@ WORKDIR /ai-serving
 
 ENV \
   LANG=C.UTF-8 \
-  JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+  JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 
 RUN apt-get update &&\
-  apt-get install -y libgomp1 openjdk-11-jre ca-certificates-java &&\
+  apt-get install -y libgomp1 openjdk-17-jre ca-certificates-java &&\
   rm -rf /var/lib/apt/lists/*
 
 COPY --from=0 /code/target/scala-2.13/*.jar .
