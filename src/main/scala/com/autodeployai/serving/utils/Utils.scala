@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024 AutoDeployAI
+ * Copyright (c) 2019-2025 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -204,6 +204,20 @@ object Utils {
     if (clazz.isArray) {
       getComponentClass(clazz.getComponentType)
     } else clazz
+  }
+
+  def flatten(seq: Seq[Any]): Seq[Any] = {
+    val result = mutable.ArrayBuilder.make[Any]
+    flattenSeq(seq, result)
+    result.result()
+  }
+
+  def flattenSeq(seq: Seq[Any], output: mutable.ArrayBuilder[Any]): Unit = {
+    seq.foreach {
+      case s: Seq[_] => flattenSeq(s, output)
+      case a: Array[_] => flattenSeq(a.toSeq, output)
+      case x: Any => output += x
+    }
   }
 
   def flatten(arr: Array[_]): Any = {

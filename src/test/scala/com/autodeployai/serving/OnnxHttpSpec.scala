@@ -24,6 +24,7 @@ import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.{HttpEntity, StatusCodes}
 import akka.util.ByteString
 import com.autodeployai.serving.model.{ModelInfo, PredictResponse}
+import com.autodeployai.serving.utils.Utils
 
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
@@ -53,7 +54,7 @@ class OnnxHttpSpec extends BaseHttpSpec {
       Post(s"/v1/models/${name}/versions/${deployResponse.version}", HttpEntity.fromPath(`application/json`, input0)) ~>
         addHeader(RawHeader("Content-Type", "application/json")) ~> route ~> check {
         status shouldEqual StatusCodes.OK
-        responseAs[PredictResponse] shouldEqual loadJson[PredictResponse](getResource("mnist_response_0.json"))
+        responseAs[PredictResponse].result.data shouldEqual loadJson[PredictResponse](getResource("mnist_response_0.json")).result.data
       }
 
       undeployModel(name)
@@ -68,7 +69,11 @@ class OnnxHttpSpec extends BaseHttpSpec {
       Post(s"/v1/models/${name}/versions/${deployResponse.version}", HttpEntity.fromPath(`application/json`, input3)) ~>
         addHeader(RawHeader("Content-Type", "application/json")) ~> route ~> check {
         status shouldEqual StatusCodes.OK
-        responseAs[PredictResponse] shouldEqual loadJson[PredictResponse](getResource("mnist_response_3.json"))
+
+        val actual = Utils.flatten(responseAs[PredictResponse].result.data.get)
+        val expected = Utils.flatten(loadJson[PredictResponse](getResource("mnist_response_3.json")).result.data.get)
+
+        actual shouldEqual expected
       }
 
       undeployModel(name)

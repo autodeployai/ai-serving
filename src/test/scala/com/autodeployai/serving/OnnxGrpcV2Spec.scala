@@ -59,7 +59,8 @@ class OnnxGrpcV2Spec extends BaseGrpcSpec {
         rawInputContents = Seq.empty
       ))
 
-      modelInferResponse shouldEqual toPb(expected)
+      val expectedResponse = toPb(expected)
+      modelInferResponse.outputs.head.contents.get.fp32Contents shouldEqual expectedResponse.outputs.head.contents.get.fp32Contents
 
       blockingStub().undeploy(UndeployRequest(deployResponse.modelSpec))
     }

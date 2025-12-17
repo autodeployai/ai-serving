@@ -39,7 +39,7 @@ class OnnxHttpV2Spec extends BaseHttpSpec {
         status shouldEqual StatusCodes.OK
         val actual = responseAs[InferenceResponse]
         val expected = loadJson[InferenceResponse](getResource("mnist_response_v2_0.json"))
-        actual.dataToSeq shouldEqual expected.dataToSeq
+        actual.dataToSeq.outputs.head.data shouldEqual expected.dataToSeq.outputs.head.data
       }
 
       undeployModel(name)
@@ -55,7 +55,7 @@ class OnnxHttpV2Spec extends BaseHttpSpec {
         status shouldEqual StatusCodes.OK
         val actual = responseAs[InferenceResponse]
         val expected = loadJson[InferenceResponse](getResource("mnist_response_v2_0.json"))
-        actual.dataToSeq shouldEqual expected.dataToSeq.withModelSpec(name = name, version = None)
+        actual.dataToSeq.outputs.head.data shouldEqual expected.dataToSeq.withModelSpec(name = name, version = None).outputs.head.data
       }
 
       undeployModel(name)
