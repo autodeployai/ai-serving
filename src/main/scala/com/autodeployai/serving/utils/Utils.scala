@@ -207,12 +207,12 @@ object Utils {
   }
 
   def flatten(seq: Seq[Any]): Seq[Any] = {
-    val result = mutable.ArrayBuilder.make[Any]
+    val result = IndexedSeq.newBuilder[Any]
     flattenSeq(seq, result)
     result.result()
   }
 
-  def flattenSeq(seq: Seq[Any], output: mutable.ArrayBuilder[Any]): Unit = {
+  def flattenSeq(seq: Seq[Any], output: mutable.Builder[Any, IndexedSeq[Any]]): Unit = {
     seq.foreach {
       case s: Seq[_] => flattenSeq(s, output)
       case a: Array[_] => flattenSeq(a.toSeq, output)

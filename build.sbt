@@ -61,10 +61,11 @@ PB.targets in Compile := Seq(
 parallelExecution in Test := false
 
 assemblyMergeStrategy in assembly := {
-  case "META-INF/io.netty.versions.properties" => MergeStrategy.last
-  case "META-INF/versions/9/module-info.class" => MergeStrategy.concat
-  case PathList("google", "protobuf", xs @ _*)   => MergeStrategy.last
-  case x                                       =>
+  case "META-INF/io.netty.versions.properties"  => MergeStrategy.last
+  case "META-INF/versions/9/module-info.class"  => MergeStrategy.concat
+  case PathList("module-info.class")            => MergeStrategy.discard
+  case PathList("google", "protobuf", xs @ _*)  => MergeStrategy.last
+  case x                                        =>
     val oldStrategy = (assemblyMergeStrategy in assembly).value
     oldStrategy(x)
 }

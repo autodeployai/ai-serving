@@ -3,7 +3,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License").
 # --------------------------------------------------------------
 
-FROM nvcr.io/nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+FROM nvcr.io/nvidia/cuda:12.3.2-cudnn9-runtime-ubuntu22.04
 MAINTAINER AutoDeployAI "autodeploy.ai@gmail.com"
 
 ADD . /code
@@ -25,7 +25,7 @@ RUN cd /code &&\
   sbt -Dgpu=true assembly
 
 
-FROM nvcr.io/nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+FROM nvcr.io/nvidia/cuda:12.3.2-cudnn9-runtime-ubuntu22.04
 
 WORKDIR /ai-serving
 
