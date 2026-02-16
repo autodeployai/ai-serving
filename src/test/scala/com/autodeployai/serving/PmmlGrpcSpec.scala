@@ -16,9 +16,12 @@
 
 package com.autodeployai.serving
 
+import akka.http.scaladsl.model.ContentTypes.`text/xml(UTF-8)`
+
 import java.nio.file.Files
 import protobuf.Value.Kind
 import protobuf._
+import grpc._
 import com.autodeployai.serving.model.ModelInfo
 import com.google.protobuf.ByteString
 
@@ -127,6 +130,20 @@ class PmmlGrpcSpec extends BaseGrpcSpec {
 
       blockingStub().undeploy(UndeployRequest(Some(ModelSpec("a-pmml-model"))))
       blockingStub().undeploy(UndeployRequest(Some(ModelSpec("b-pmml-model"))))
+    }
+
+    "deploy a PMML model with warmup enabled using zero data" in {
+      val input = getResource("single_iris_dectree.xml")
+      val deployConfig = DeployConfig(warmupCount=100, warmupDataType="zero")
+      blockingStub().deploy(DeployRequest("a-pmml-model", ByteString.copyFrom(Files.readAllBytes(input)), config = Some(deployConfig)))
+      blockingStub().undeploy(UndeployRequest(Some(ModelSpec("a-pmml-model"))))
+    }
+
+    "deploy a PMML model with warmup enabled using random data" in {
+      val input = getResource("single_iris_dectree.xml")
+      val deployConfig = DeployConfig(warmupCount=100, warmupDataType="random")
+      blockingStub().deploy(DeployRequest("a-pmml-model", ByteString.copyFrom(Files.readAllBytes(input)), config = Some(deployConfig)))
+      blockingStub().undeploy(UndeployRequest(Some(ModelSpec("a-pmml-model"))))
     }
   }
 

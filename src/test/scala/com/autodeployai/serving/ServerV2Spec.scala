@@ -17,7 +17,7 @@
 package com.autodeployai.serving
 
 import akka.http.scaladsl.model.StatusCodes
-import com.autodeployai.serving.model.ServerMetadataResponse
+import com.autodeployai.serving.model.{ServerLiveResponse, ServerMetadataResponse, ServerReadyResponse}
 
 class ServerV2Spec extends BaseHttpSpec {
 
@@ -26,12 +26,14 @@ class ServerV2Spec extends BaseHttpSpec {
     "return an OK status response for GET requests to /v2/health/live" in {
       Get("/v2/health/live") ~> route ~> check {
         status shouldEqual StatusCodes.OK
+        responseAs[ServerLiveResponse] shouldEqual ServerLiveResponse(true)
       }
     }
 
     "return an OK status response for GET requests to /v2/health/ready" in {
       Get("/v2/health/ready") ~> route ~> check {
         status shouldEqual StatusCodes.OK
+        responseAs[ServerReadyResponse] shouldEqual ServerReadyResponse(true)
       }
     }
 

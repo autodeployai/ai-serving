@@ -13,11 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.autodeployai.serving.protobuf
+package com.autodeployai.serving.grpc
 
 import inference.{GRPCInferenceServiceGrpc, ModelInferRequest, ModelInferResponse, ModelMetadataRequest, ModelMetadataResponse, ModelReadyRequest, ModelReadyResponse, ServerLiveRequest, ServerLiveResponse, ServerMetadataRequest, ServerMetadataResponse, ServerReadyRequest, ServerReadyResponse}
 import com.autodeployai.serving.AIServer.executionContext
-import com.autodeployai.serving.deploy.ModelManager
+import com.autodeployai.serving.deploy.InferenceService
 import com.autodeployai.serving.errors.ErrorHandler.grpcHandler
 import com.autodeployai.serving.utils.Utils
 
@@ -42,7 +42,7 @@ class DeploymentServiceImplV2 extends GRPCInferenceServiceGrpc.GRPCInferenceServ
   /** The ModelReady API indicates if a specific model is ready for inferencing.
    */
   override def modelReady(request: ModelReadyRequest): Future[ModelReadyResponse] = {
-    ModelManager.isModelReady(request.name, Utils.toOption(request.version)).transform {
+    InferenceService.isModelReady(request.name, Utils.toOption(request.version)).transform {
       case Success(value) =>
         Success(ModelReadyResponse(ready = value))
       case Failure(exception) =>
@@ -63,7 +63,7 @@ class DeploymentServiceImplV2 extends GRPCInferenceServiceGrpc.GRPCInferenceServ
    * indicates success and other codes indicate failure.
    */
   override def modelMetadata(request: ModelMetadataRequest): Future[ModelMetadataResponse] = {
-    ModelManager.getMetadataV2(request.name, Utils.toOption(request.version)).
+    InferenceService.getMetadataV2(request.name, Utils.toOption(request.version)).
       map(x => toPb(x)).
       transform {
       case Success(result) =>
@@ -78,9 +78,8 @@ class DeploymentServiceImplV2 extends GRPCInferenceServiceGrpc.GRPCInferenceServ
    * indicates success and other codes indicate failure.
    */
   override def modelInfer(request: ModelInferRequest): Future[ModelInferResponse] = {
-    ModelManager.predict(fromPb(request), request.modelName, Utils.toOption(request.modelVersion), grpc = true).
-      map(x => toPb(x)).
-      transform {
+    InferenceService.predict(fromPb(request), request.modelName, Utils.toOption(request.modelVersion)).
+      map(x => toPb(x)).transform {
       case Success(result) =>
         Success(result)
       case Failure(exception) =>

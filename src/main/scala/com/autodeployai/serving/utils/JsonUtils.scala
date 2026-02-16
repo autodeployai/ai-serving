@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2025 AutoDeployAI
+ * Copyright (c) 2019-2026 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,45 +81,45 @@ object JsonUtils {
   }
 
   def jsonToINT8(value: JsValue): Byte = value match {
-    case JsNumber(n)  => n.toByte
-    case JsString(s)  => s.toByte
+    case JsNumber(n)  => n.byteValue
+    case JsString(s)  => java.lang.Byte.parseByte(s)
     case JsBoolean(b) => if (b) 1 else 0
     case _            => 0
   }
 
   def jsonToINT16(value: JsValue): Short = value match {
-    case JsNumber(n)  => n.toShort
-    case JsString(s)  => s.toShort
+    case JsNumber(n)  => n.shortValue
+    case JsString(s)  => java.lang.Short.parseShort(s)
     case JsBoolean(b) => if (b) 1 else 0
     case _            => 0
   }
 
   def jsonToINT32(value: JsValue): Int = value match {
-    case JsNumber(n)  => n.toInt
-    case JsString(s)  => s.toInt
+    case JsNumber(n)  => n.bigDecimal.intValue
+    case JsString(s)  => java.lang.Integer.parseInt(s)
     case JsBoolean(b) => if (b) 1 else 0
     case _            => 0
   }
 
   def jsonToINT64(value: JsValue): Long = value match {
-    case JsNumber(n)  => n.toLong
-    case JsString(s)  => s.toLong
+    case JsNumber(n)  => n.bigDecimal.longValue
+    case JsString(s)  => java.lang.Long.parseLong(s)
     case JsBoolean(b) => if (b) 1L else 0L
     case _            => 0L
   }
 
   def jsonToFP32(value: JsValue): Float = value match {
-    case JsNumber(n)  => n.toFloat
+    case JsNumber(n)  => n.bigDecimal.floatValue()
     case JsNull       => Float.NaN
-    case JsString(s)  => s.toFloat
+    case JsString(s)  => java.lang.Float.parseFloat(s)
     case JsBoolean(b) => if (b) 1.0f else 0.0f
     case _            => 0.0f
   }
 
   def jsonToFP64(value: JsValue): Double = value match {
-    case JsNumber(n)  => n.toDouble
+    case JsNumber(n)  => n.bigDecimal.doubleValue()
     case JsNull       => Double.NaN
-    case JsString(s)  => s.toDouble
+    case JsString(s)  => java.lang.Double.parseDouble(s)
     case JsBoolean(b) => if (b) 1.0 else 0.0
     case _            => 0.0
   }
@@ -134,14 +134,21 @@ object JsonUtils {
   def jsArrayToFP32(value: JsArray, buffer: Array[Float], pos: Int): Int = {
     var result = 0
     var idx = pos
-    value.elements.zipWithIndex.foreach {
-      case (array: JsArray, _: Int)   =>
-        val count = jsArrayToFP32(array, buffer, idx)
-        idx += count
-        result += count
-      case (scalar: JsValue, i: Int)  =>
-        buffer(idx + i) = jsonToFP32(scalar)
-        result += 1
+
+    val elements = value.elements
+    val length = elements.size
+    var i = 0
+    while (i < length) {
+      elements(i) match {
+        case array: JsArray  =>
+          val count = jsArrayToFP32(array, buffer, idx)
+          idx += count
+          result += count
+        case scalar: JsValue =>
+          buffer(idx + i) = jsonToFP32(scalar)
+          result += 1
+      }
+      i += 1
     }
     result
   }
@@ -149,14 +156,21 @@ object JsonUtils {
   def jsArrayToFP64(value: JsArray, buffer: Array[Double], pos: Int): Int = {
     var result = 0
     var idx = pos
-    value.elements.zipWithIndex.foreach {
-      case (array: JsArray, _: Int)   =>
-        val count = jsArrayToFP64(array, buffer, idx)
-        idx += count
-        result + count
-      case (scalar: JsValue, i: Int)  =>
-        buffer(idx + i) = jsonToFP64(scalar)
-        result += 1
+
+    val elements = value.elements
+    val length = elements.size
+    var i = 0
+    while (i < length) {
+      elements(i) match {
+        case array: JsArray  =>
+          val count = jsArrayToFP64(array, buffer, idx)
+          idx += count
+          result += count
+        case scalar: JsValue =>
+          buffer(idx + i) = jsonToFP64(scalar)
+          result += 1
+      }
+      i += 1
     }
     result
   }
@@ -164,14 +178,21 @@ object JsonUtils {
   def jsArrayToINT64(value: JsArray, buffer: Array[Long], pos: Int): Int = {
     var result = 0
     var idx = pos
-    value.elements.zipWithIndex.foreach {
-      case (array: JsArray, _: Int)   =>
-        val count = jsArrayToINT64(array, buffer, idx)
-        idx += count
-        result += count
-      case (scalar: JsValue, i: Int)  =>
-        buffer(idx + i) = jsonToINT64(scalar)
-        result += 1
+
+    val elements = value.elements
+    val length = elements.size
+    var i = 0
+    while (i < length) {
+      elements(i) match {
+        case array: JsArray  =>
+          val count = jsArrayToINT64(array, buffer, idx)
+          idx += count
+          result += count
+        case scalar: JsValue =>
+          buffer(idx + i) = jsonToINT64(scalar)
+          result += 1
+      }
+      i += 1
     }
     result
   }
@@ -179,14 +200,21 @@ object JsonUtils {
   def jsArrayToINT32(value: JsArray, buffer: Array[Int], pos: Int): Int = {
     var result = 0
     var idx = pos
-    value.elements.zipWithIndex.foreach {
-      case (array: JsArray, _: Int)   =>
-        val count = jsArrayToINT32(array, buffer, idx)
-        idx += count
-        result + count
-      case (scalar: JsValue, i: Int)  =>
-        buffer(idx + i) = jsonToINT32(scalar)
-        result += 1
+
+    val elements = value.elements
+    val length = elements.size
+    var i = 0
+    while (i < length) {
+      elements(i) match {
+        case array: JsArray  =>
+          val count = jsArrayToINT32(array, buffer, idx)
+          idx += count
+          result += count
+        case scalar: JsValue =>
+          buffer(idx + i) = jsonToINT32(scalar)
+          result += 1
+      }
+      i += 1
     }
     result
   }
@@ -194,14 +222,21 @@ object JsonUtils {
   def jsArrayToINT16(value: JsArray, buffer: Array[Short], pos: Int): Int = {
     var result = 0
     var idx = pos
-    value.elements.zipWithIndex.foreach {
-      case (array: JsArray, _: Int)   =>
-        val count = jsArrayToINT16(array, buffer, idx)
-        idx += count
-        result + count
-      case (scalar: JsValue, i: Int)  =>
-        buffer(idx + i) = jsonToINT16(scalar)
-        result += 1
+
+    val elements = value.elements
+    val length = elements.size
+    var i = 0
+    while (i < length) {
+      elements(i) match {
+        case array: JsArray  =>
+          val count = jsArrayToINT16(array, buffer, idx)
+          idx += count
+          result += count
+        case scalar: JsValue =>
+          buffer(idx + i) = jsonToINT16(scalar)
+          result += 1
+      }
+      i += 1
     }
     result
   }
@@ -209,14 +244,21 @@ object JsonUtils {
   def jsArrayToINT8(value: JsArray, buffer: Array[Byte], pos: Int): Int = {
     var result = 0
     var idx = pos
-    value.elements.zipWithIndex.foreach {
-      case (array: JsArray, _: Int)   =>
-        val count = jsArrayToINT8(array, buffer, idx)
-        idx += count
-        result + count
-      case (scalar: JsValue, i: Int)  =>
-        buffer(idx + i) = jsonToINT8(scalar)
-        result += 1
+
+    val elements = value.elements
+    val length = elements.size
+    var i = 0
+    while (i < length) {
+      elements(i) match {
+        case array: JsArray  =>
+          val count = jsArrayToINT8(array, buffer, idx)
+          idx += count
+          result += count
+        case scalar: JsValue =>
+          buffer(idx + i) = jsonToINT8(scalar)
+          result += 1
+      }
+      i += 1
     }
     result
   }
@@ -224,14 +266,21 @@ object JsonUtils {
   def jsArrayToBOOL(value: JsArray, buffer: Array[Boolean], pos: Int): Int = {
     var result = 0
     var idx = pos
-    value.elements.zipWithIndex.foreach {
-      case (array: JsArray, _: Int)   =>
-        val count = jsArrayToBOOL(array, buffer, idx)
-        idx += count
-        result + count
-      case (scalar: JsValue, i: Int)  =>
-        buffer(idx + i) = jsonToBOOL(scalar)
-        result += 1
+
+    val elements = value.elements
+    val length = elements.size
+    var i = 0
+    while (i < length) {
+      elements(i) match {
+        case array: JsArray  =>
+          val count = jsArrayToBOOL(array, buffer, idx)
+          idx += count
+          result += count
+        case scalar: JsValue =>
+          buffer(idx + i) = jsonToBOOL(scalar)
+          result += 1
+      }
+      i += 1
     }
     result
   }
@@ -239,14 +288,21 @@ object JsonUtils {
   def jsArrayToString(value: JsArray, buffer: Array[String], pos: Int): Int = {
     var result = 0
     var idx = pos
-    value.elements.zipWithIndex.foreach {
-      case (array: JsArray, _: Int)   =>
-        val count = jsArrayToString(array, buffer, idx)
-        idx += count
-        result + count
-      case (scalar: JsValue, i: Int)  =>
-        buffer(idx + i) = jsonToString(scalar)
-        result += 1
+
+    val elements = value.elements
+    val length = elements.size
+    var i = 0
+    while (i < length) {
+      elements(i) match {
+        case array: JsArray  =>
+          val count = jsArrayToString(array, buffer, idx)
+          idx += count
+          result += count
+        case scalar: JsValue =>
+          buffer(idx + i) = jsonToString(scalar)
+          result += 1
+      }
+      i += 1
     }
     result
   }
@@ -254,15 +310,22 @@ object JsonUtils {
   def jsArrayToFP16(value: JsArray, buffer: Array[Short], pos: Int): Int = {
     var result = 0
     var idx = pos
-    value.elements.zipWithIndex.foreach {
-      case (array: JsArray, _: Int)   =>
-        val count = jsArrayToFP16(array, buffer, idx)
-        idx += count
-        result + count
-      case (scalar: JsValue, i: Int)  =>
-        val f = jsonToFP32(scalar)
-        buffer(idx + i) = Fp16Conversions.floatToFp16(f)
-        result += 1
+
+    val elements = value.elements
+    val length = elements.size
+    var i = 0
+    while (i < length) {
+      elements(i) match {
+        case array: JsArray  =>
+          val count = jsArrayToFP16(array, buffer, idx)
+          idx += count
+          result += count
+        case scalar: JsValue =>
+          val f = jsonToFP32(scalar)
+          buffer(idx + i) = Fp16Conversions.floatToFp16(f)
+          result += 1
+      }
+      i += 1
     }
     result
   }
@@ -270,15 +333,22 @@ object JsonUtils {
   def jsArrayToBF16(value: JsArray, buffer: Array[Short], pos: Int): Int = {
     var result = 0
     var idx = pos
-    value.elements.zipWithIndex.foreach {
-      case (array: JsArray, _: Int)   =>
-        val count = jsArrayToBF16(array, buffer, idx)
-        idx += count
-        result + count
-      case (scalar: JsValue, i: Int)  =>
-        val f = jsonToFP32(scalar)
-        buffer(idx + i) = Fp16Conversions.floatToBf16(f)
-        result += 1
+
+    val elements = value.elements
+    val length = elements.size
+    var i = 0
+    while (i < length) {
+      elements(i) match {
+        case array: JsArray  =>
+          val count = jsArrayToBF16(array, buffer, idx)
+          idx += count
+          result += count
+        case scalar: JsValue =>
+          val f = jsonToFP32(scalar)
+          buffer(idx + i) = Fp16Conversions.floatToBf16(f)
+          result += 1
+      }
+      i += 1
     }
     result
   }

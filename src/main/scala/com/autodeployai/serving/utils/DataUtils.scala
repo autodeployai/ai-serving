@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2025 AutoDeployAI
+ * Copyright (c) 2019-2026 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,37 +32,86 @@ object DataUtils {
   val FALSE_BYTE: Byte = 0.toByte
 
   def anyToFloat(value: Any): Float = value match {
+    case f: Float  => f
+    case d: Double => d.floatValue
+    case i: Int    => i.floatValue
+    case l: Long   => l.floatValue
+    case s: Short  => s.floatValue
+    case b: Byte   => b.floatValue
+    case b: Boolean => if (b) 1.0f else 0.0f
     case d: Number => d.floatValue
     case _         => Try(value.toString.toFloat).getOrElse(0.0f)
   }
 
   def anyToDouble(value: Any): Double = value match {
+    case d: Double => d
+    case f: Float  => f.doubleValue
+    case i: Int    => i.doubleValue
+    case l: Long   => l.doubleValue
+    case s: Short  => s.doubleValue
+    case b: Byte   => b.doubleValue
+    case b: Boolean => if (b) 1.0 else 0.0
     case d: Number => d.doubleValue
     case _         => Try(value.toString.toDouble).getOrElse(0.0)
   }
 
   def anyToByte(value: Any): Byte = value match {
+    case b: Byte   => b
+    case i: Int    => i.byteValue
+    case l: Long   => l.byteValue
+    case s: Short  => s.byteValue
+    case d: Double => d.byteValue
+    case f: Float  => f.byteValue
+    case b: Boolean => if (b) 1 else 0
     case d: Number => d.byteValue
     case _         => Try(value.toString.toByte).getOrElse(0)
   }
 
   def anyToShort(value: Any): Short = value match {
+    case s: Short  => s
+    case i: Int    => i.shortValue
+    case b: Byte   => b.shortValue
+    case l: Long   => l.shortValue
+    case d: Double => d.shortValue
+    case f: Float  => f.shortValue
+    case b: Boolean => if (b) 1 else 0
     case d: Number => d.shortValue
     case _         => Try(value.toString.toShort).getOrElse(0)
   }
 
   def anyToInt(value: Any): Int = value match {
+    case i: Int    => i
+    case s: Short  => s.intValue
+    case b: Byte   => b.intValue
+    case l: Long   => l.intValue
+    case d: Double => d.intValue
+    case f: Float  => f.intValue
+    case b: Boolean => if (b) 1 else 0
     case d: Number => d.intValue
     case _         => Try(value.toString.toInt).getOrElse(0)
   }
 
   def anyToLong(value: Any): Long = value match {
+    case l: Long   => l
+    case i: Int    => i.longValue
+    case s: Short  => s.longValue
+    case b: Byte   => b.longValue
+    case d: Double => d.longValue
+    case f: Float  => f.longValue
+    case b: Boolean => if (b) 1L else 0L
     case d: Number => d.longValue
     case _         => Try(value.toString.toLong).getOrElse(0)
   }
 
   def anyToBoolean(value: Any): Boolean = value match {
     case b: Boolean => b
+    case l: Long   => l == 1L
+    case i: Int    => i == 1
+    case s: Short  => s == 1
+    case b: Byte   => b == 1
+    case d: Double => d == 1.0
+    case f: Float  => f == 1.0f
+    case d: Number => d.intValue == 1
     case _          => Try(value.toString.toBoolean).getOrElse(false)
   }
 
@@ -86,6 +135,14 @@ object DataUtils {
   }
 
   def writeBinaryString(array: Array[String]): ByteString = {
+    ByteString.copyFrom(convertToByteBuffer(array))
+  }
+
+  def convertToByteBuffer(array: Array[String]): ByteBuffer = {
+    ByteBuffer.wrap(convertToByteArray(array))
+  }
+
+  def convertToByteArray(array: Array[String]): Array[Byte] = {
     val buffer = new ByteArrayOutputStream()
     val len = array.length
     var i = 0
@@ -108,10 +165,10 @@ object DataUtils {
 
       i += 1
     }
-    ByteString.copyFrom(buffer.toByteArray)
+    buffer.toByteArray
   }
 
-  def convertToByteArray(array: Array[Double]): Array[Byte] = {
+  def convertToByteBuffer(array: Array[Double]): ByteBuffer = {
     val byteBuffer = ByteBuffer.allocate(array.length * java.lang.Double.BYTES)
     byteBuffer.order(ByteOrder.nativeOrder)
 
@@ -120,10 +177,14 @@ object DataUtils {
       byteBuffer.putDouble(array(i))
       i += 1
     }
-    byteBuffer.array
+    byteBuffer
   }
 
-  def convertToByteArray(array: Array[Boolean]): Array[Byte] = {
+  def convertToByteArray(array: Array[Double]): Array[Byte] = {
+    convertToByteBuffer(array).array
+  }
+
+  def convertToByteBuffer(array: Array[Boolean]): ByteBuffer = {
     val byteArray = new Array[Byte](array.length)
 
     var i = 0
@@ -131,10 +192,14 @@ object DataUtils {
       byteArray(i) = if (array(i)) TRUE_BYTE else FALSE_BYTE
       i += 1
     }
-    byteArray
+    ByteBuffer.wrap(byteArray)
   }
 
-  def convertToByteArray(array: Array[Long]): Array[Byte] = {
+  def convertToByteArray(array: Array[Boolean]): Array[Byte] = {
+    convertToByteBuffer(array).array()
+  }
+
+  def convertToByteBuffer(array: Array[Long]): ByteBuffer = {
     val byteBuffer = ByteBuffer.allocate(array.length * java.lang.Long.BYTES)
     byteBuffer.order(ByteOrder.nativeOrder)
 
@@ -143,7 +208,11 @@ object DataUtils {
       byteBuffer.putLong(array(i))
       i += 1
     }
-    byteBuffer.array
+    byteBuffer
+  }
+
+  def convertToByteArray(array: Array[Long]): Array[Byte] = {
+    convertToByteBuffer(array).array
   }
 
   def convertToBooleanArray(array: Array[Byte]): Array[Boolean] = {
@@ -201,5 +270,12 @@ object DataUtils {
       Fp16Conversions.convertFp16BufferToFloatBuffer(buffer.asShortBuffer()).array()
     case DataType.BF16  =>
       Fp16Conversions.convertBf16BufferToFloatBuffer(buffer.asShortBuffer()).array()
+  }
+
+  def sizeof(datatype: DataType): Int = datatype match {
+    case DataType.FP32 | DataType.INT32 | DataType.UINT32 => 4
+    case DataType.FP64 | DataType.INT64 | DataType.UINT64 => 8
+    case DataType.INT16 | DataType.UINT16 | DataType.FP16 | DataType.BF16 => 2
+    case DataType.INT8 | DataType.UINT8 | DataType.BOOL | DataType.BYTES  => 1
   }
 }

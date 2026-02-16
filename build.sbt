@@ -3,11 +3,11 @@ name := (sys.props.getOrElse("gpu", "false") match {
   case _            => "ai-serving"
 })
 
-version := "2.0.0"
+version := "2.1.0"
 
 organization := "com.autodeployai"
 
-organizationHomepage := Some(new URL("https://autodeployai.com"))
+organizationHomepage := Some(new URL("https://github.com/autodeployai"))
 
 description := "Serving AI/ML models in the open standard formats PMML and ONNX with both HTTP (REST API) and gRPC endpoints"
 

@@ -18,11 +18,12 @@ package com.autodeployai.serving
 
 import java.nio.file.Paths
 import protobuf.DeploymentServiceGrpc.DeploymentServiceBlockingStub
-import protobuf.{DeploymentServiceGrpc, DeploymentServiceImpl, DeploymentServiceImplV2}
-import com.autodeployai.serving.deploy.ModelManager
+import protobuf.DeploymentServiceGrpc
+import grpc.{DeploymentServiceImpl, DeploymentServiceImplV2}
+import com.autodeployai.serving.deploy.InferenceService
 import com.autodeployai.serving.utils.Utils
 import inference.GRPCInferenceServiceGrpc
-import inference.GRPCInferenceServiceGrpc.GRPCInferenceServiceBlockingStub
+import inference.GRPCInferenceServiceGrpc.{GRPCInferenceServiceBlockingStub, GRPCInferenceServiceStub}
 import io.grpc.inprocess.{InProcessChannelBuilder, InProcessServerBuilder}
 import io.grpc.testing.GrpcCleanupRule
 import org.junit.runner.Description
@@ -44,7 +45,7 @@ abstract class BaseGrpcSpec extends BaseSpec {
         outcome = test()
       } finally {
         // Shared cleanup (run at end of each test)
-        Utils.deleteDirectory(Paths.get(ModelManager.HOME_PATH))
+        Utils.deleteDirectory(Paths.get(InferenceService.homePath))
       }
     }
     grpcCleanup = new GrpcCleanupRule()
@@ -69,5 +70,12 @@ abstract class BaseGrpcSpec extends BaseSpec {
     grpcCleanup.register(InProcessServerBuilder
       .forName(serverName).directExecutor().addService(GRPCInferenceServiceGrpc.bindService(new DeploymentServiceImplV2, executionContext)).build().start())
     GRPCInferenceServiceGrpc.blockingStub(grpcCleanup.register(InProcessChannelBuilder.forName(serverName).directExecutor().build()))
+  }
+
+  def stubV2(): GRPCInferenceServiceStub = {
+    val serverName = InProcessServerBuilder.generateName
+    grpcCleanup.register(InProcessServerBuilder
+      .forName(serverName).directExecutor().addService(GRPCInferenceServiceGrpc.bindService(new DeploymentServiceImplV2, executionContext)).build().start())
+    GRPCInferenceServiceGrpc.stub(grpcCleanup.register(InProcessChannelBuilder.forName(serverName).directExecutor().build()))
   }
 }

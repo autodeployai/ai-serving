@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2025 AutoDeployAI
+ * Copyright (c) 2019-2026 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,15 +24,16 @@ import ai.onnxruntime.OrtSession.SessionOptions
 import ai.onnxruntime._
 import com.autodeployai.serving.errors._
 import com.autodeployai.serving.model._
-import com.autodeployai.serving.utils.{DataUtils, Utils}
+import com.autodeployai.serving.utils.{Constants, DataUtils, Utils}
 import com.typesafe.config.{Config, ConfigFactory}
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.util
 import scala.annotation.tailrec
 import scala.collection.immutable.ArraySeq
+import scala.concurrent.ExecutionContext
 import scala.reflect.ClassTag
-import scala.util.{Failure, Success, Using}
+import scala.util.{Failure, Random, Success, Using}
 
 case class InputTensor(name: String, info: TensorInfo)
 
@@ -48,9 +49,18 @@ case class InputsWrapper(inputs: java.util.Map[String, OnnxTensor]) extends Auto
 /**
  * Supports the model of Open Neural Network Exchange (ONNX)
  */
-class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends PredictModel {
+class OnnxModel(val session: OrtSession,
+                val env: OrtEnvironment,
+                override val modelName: String,
+                override val modelVersion: String,
+                override val config: Option[Config]
+               )(implicit ec: ExecutionContext) extends PredictModel {
 
   val log: Logger = LoggerFactory.getLogger(this.getClass)
+
+  // Create batch processor if it's supported and properly configured
+  override val batchProcessorV2: Option[BatchProcessor[InferenceRequest, InferenceResponse]] =
+    createBatchProcessorV2(this, config)
 
   // A list of input tensors
   private val inputTensors: Array[InputTensor] = {
@@ -89,7 +99,7 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
             fp16 = info.`type` == OnnxJavaType.FLOAT16 || info.`type` == OnnxJavaType.BFLOAT16
           }
         case x =>
-          log.warn(s"The non-tensor output ${entry.getKey} with ${x} ignored")
+          log.warn(s"The non-tensor output ${entry.getKey} with $x ignored")
       }
     }
     (result, fp16)
@@ -97,7 +107,10 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
 
   private val outputNames: java.util.Set[String] = session.getOutputNames
 
-  override def predict(request: PredictRequest, grpc: Boolean): PredictResponse = {
+  // Start the warmup process if it's configured properly.
+  warmup()
+
+  override def predict(request: PredictRequest): PredictResponse = {
 
     val requestedOutput = request.filter.flatMap(x => toOption(x)).map(x => {
       val set = new util.HashSet[String]()
@@ -169,7 +182,7 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
     PredictResponse(result)
   }
 
-  override def predict(request: InferenceRequest, grpc: Boolean): InferenceResponse = {
+  override def predict(request: InferenceRequest): InferenceResponse = {
     val requestedOutput = request.outputs.map(x => {
       val set = new util.HashSet[String]()
       x.foreach(output => {
@@ -181,10 +194,10 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
     }).getOrElse(outputTensorNames)
     val inputs = request.inputs.map(x => x.name -> x).toMap
 
-    val rawOutput = if (grpc) {
+    val rawOutput = {
       val flag = request.parameters.flatMap(x => x.get("raw_output")).getOrElse(false).asInstanceOf[Boolean]
       if (!flag) hasFP16 else true
-    } else false
+    }
 
     Using.Manager { use =>
       val wrapper = use(createInputsWrapperV2(inputs))
@@ -199,48 +212,28 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
         onnxValue match {
           case tensor: OnnxTensor =>
             val info = tensor.getInfo
-            val data = if (grpc) {
-              if (info.`type` == OnnxJavaType.STRING) {
-                OrtUtil.flattenString(tensor.getValue)
-              } else {
-                if (rawOutput) {
-                  tensor.getByteBuffer.array()
-                } else {
-                  info.`type` match {
-                    case OnnxJavaType.FLOAT  =>
-                      tensor.getFloatBuffer.array()
-                    case OnnxJavaType.DOUBLE  =>
-                      tensor.getDoubleBuffer.array()
-                    case OnnxJavaType.INT32   =>
-                      tensor.getIntBuffer.array()
-                    case OnnxJavaType.INT64   =>
-                      tensor.getLongBuffer.array()
-                    case OnnxJavaType.INT8 | OnnxJavaType.UINT8 =>
-                      tensor.getByteBuffer.array()
-                    case OnnxJavaType.BOOL    =>
-                      tensor.getByteBuffer.array().map(x => x != 0)
-                    case OnnxJavaType.INT16   => tensor.getShortBuffer.array()
-                    case _ => OutputNotSupportedException(entry.getKey, info.`type`.toString)
-                  }
-                }
-              }
+            val data = if (info.`type` == OnnxJavaType.STRING) {
+              OrtUtil.flattenString(tensor.getValue)
             } else {
-              info.`type` match {
-                case OnnxJavaType.FLOAT | OnnxJavaType.FLOAT16 | OnnxJavaType.BFLOAT16  =>
-                  tensor.getFloatBuffer.array()
-                case OnnxJavaType.DOUBLE  =>
-                  tensor.getDoubleBuffer.array()
-                case OnnxJavaType.INT32   =>
-                  tensor.getIntBuffer.array()
-                case OnnxJavaType.INT64   =>
-                  tensor.getLongBuffer.array()
-                case OnnxJavaType.INT8 | OnnxJavaType.UINT8 =>
-                  tensor.getByteBuffer.array()
-                case OnnxJavaType.BOOL    =>
-                  tensor.getByteBuffer.array().map(x => x != 0)
-                case OnnxJavaType.INT16   => tensor.getShortBuffer.array()
-                case OnnxJavaType.STRING  => tensor.getValue
-                case _ => OutputNotSupportedException(entry.getKey, info.`type`.toString)
+              if (rawOutput) {
+                tensor.getByteBuffer
+              } else {
+                info.`type` match {
+                  case OnnxJavaType.FLOAT | OnnxJavaType.FLOAT16 | OnnxJavaType.BFLOAT16  =>
+                    tensor.getFloatBuffer.array()
+                  case OnnxJavaType.DOUBLE  =>
+                    tensor.getDoubleBuffer.array()
+                  case OnnxJavaType.INT32   =>
+                    tensor.getIntBuffer.array()
+                  case OnnxJavaType.INT64   =>
+                    tensor.getLongBuffer.array()
+                  case OnnxJavaType.INT8 | OnnxJavaType.UINT8 =>
+                    tensor.getByteBuffer.array()
+                  case OnnxJavaType.BOOL    =>
+                    tensor.getByteBuffer.array().map(x => x != 0)
+                  case OnnxJavaType.INT16   => tensor.getShortBuffer.array()
+                  case _ => OutputNotSupportedException(entry.getKey, info.`type`.toString)
+                }
               }
             }
             outputs += ResponseOutput(name=entry.getKey,
@@ -254,7 +247,13 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
       }
       outputs.result()
     } match {
-      case Success(value) => InferenceResponse(id=request.id, parameters=request.parameters, outputs=value)
+      case Success(value) => InferenceResponse(
+        model_name=modelName,
+        model_version=Option(modelVersion),
+        id=request.id,
+        parameters=request.parameters,
+        outputs=value
+      )
       case Failure(ex)    => throw ex
     }
   }
@@ -274,6 +273,7 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
   }
 
   override def close(): Unit = {
+    batchProcessorV2.foreach(_.close())
     safeClose(session)
   }
 
@@ -330,13 +330,12 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
 
   @tailrec
   private def convertToTensor(name: String, tensorInfo: TensorInfo, inputValue: Option[Any], inputShape: Option[Seq[_]] = None): OnnxTensor = inputValue match {
-    case Some(value) => {
+    case Some(value) =>
       import OnnxJavaType._
       val expectedShape = tensorInfo.getShape
       value match {
-        case (v, s: Seq[_]) => {
+        case (v, s: Seq[_]) =>
           convertToTensor(name, tensorInfo, Option(v), Option(s))
-        }
         case buffer: ByteBuffer =>
           val shape = inputShape.map(x => convertShape(x)).getOrElse(expectedShape)
           val convertedShape = if (isDynamicShape(expectedShape)) shape else expectedShape
@@ -379,56 +378,43 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
           val convertedShape = if (isDynamicShape(expectedShape)) shape else expectedShape
           val intCount = count.toInt
           tensorInfo.`type` match {
-            case FLOAT   => {
+            case FLOAT   =>
               val data = copyToBuffer[Float](intCount, value)
               OnnxTensor.createTensor(env, FloatBuffer.wrap(data), convertedShape)
-            }
-            case DOUBLE  => {
+            case DOUBLE  =>
               val data = copyToBuffer[Double](intCount, value)
               OnnxTensor.createTensor(env, DoubleBuffer.wrap(data), convertedShape)
-            }
-            case INT8    => {
+            case INT8    =>
               val data = copyToBuffer[Byte](intCount, value)
               OnnxTensor.createTensor(env, ByteBuffer.wrap(data), convertedShape)
-            }
-            case INT16   => {
+            case INT16   =>
               val data = copyToBuffer[Short](intCount, value)
               OnnxTensor.createTensor(env, ShortBuffer.wrap(data), convertedShape)
-            }
-            case INT32   => {
+            case INT32   =>
               val data = copyToBuffer[Int](intCount, value)
               OnnxTensor.createTensor(env, IntBuffer.wrap(data), convertedShape)
-            }
-            case INT64   => {
+            case INT64   =>
               val data = copyToBuffer[Long](intCount, value)
               OnnxTensor.createTensor(env, LongBuffer.wrap(data), convertedShape)
-            }
-            case BOOL    => {
+            case BOOL    =>
               val data = copyToBuffer[Boolean](intCount, value)
               OnnxTensor.createTensor(env, OrtUtil.reshape(data, convertedShape))
-            }
-            case STRING  => {
+            case STRING  =>
               val data = copyToBuffer[String](intCount, value)
               OnnxTensor.createTensor(env, data, convertedShape)
-            }
-            case UINT8   => {
+            case UINT8   =>
               val data = copyToBuffer[Byte](intCount, value)
               OnnxTensor.createTensor(env, ByteBuffer.wrap(data), convertedShape, OnnxJavaType.UINT8)
-            }
-            case FLOAT16  => {
+            case FLOAT16  =>
               val data = copyToBuffer[Short](intCount, value)
               OnnxTensor.createTensor(env, ShortBuffer.wrap(data), convertedShape, OnnxJavaType.FLOAT16)
-            }
-            case BFLOAT16  => {
+            case BFLOAT16  =>
               val data = copyToBuffer[Short](intCount, value)
               OnnxTensor.createTensor(env, ShortBuffer.wrap(data), convertedShape, OnnxJavaType.BFLOAT16)
-            }
-            case UNKNOWN => {
+            case UNKNOWN =>
               throw UnknownDataTypeException(name)
-            }
           }
       }
-    }
     case _           => throw MissingValueException(name)
   }
 
@@ -438,92 +424,82 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
       case java.lang.Float.TYPE   =>
         value match {
           case array: Array[Float] => array
-          case _ => {
+          case _ =>
             val data = Array.ofDim[Float](len)
             copy[Float](data, 0, value, anyToFloat)
             data
-          }
         }
       case java.lang.Double.TYPE  =>
         value match {
           case array: Array[Double] => array
-          case _ => {
+          case _ =>
             val data = Array.ofDim[Double](len)
             copy[Double](data, 0, value, anyToDouble)
             data
-          }
         }
       case java.lang.Integer.TYPE =>
         value match {
           case array: Array[Int] => array
-          case _ => {
+          case _ =>
             val data = Array.ofDim[Int](len)
             copy[Int](data, 0, value, anyToInt)
             data
-          }
         }
       case java.lang.Long.TYPE =>
         value match {
           case array: Array[Long] => array
-          case _ => {
+          case _ =>
             val data = Array.ofDim[Long](len)
             copy[Long](data, 0, value, anyToLong)
             data
-          }
         }
       case java.lang.Byte.TYPE =>
         value match {
           case array: Array[Byte] => array
-          case _ => {
+          case _ =>
             val data = Array.ofDim[Byte](len)
             copy[Byte](data, 0, value, anyToByte)
             data
-          }
         }
       case java.lang.Short.TYPE =>
         value match {
           case array: Array[Short] => array
-          case _ => {
+          case _ =>
             val data = Array.ofDim[Short](len)
             copy[Short](data, 0, value, anyToShort)
             data
-          }
         }
       case java.lang.Boolean.TYPE =>
         value match {
           case array: Array[Boolean] => array
-          case _ => {
+          case _ =>
             val data = Array.ofDim[Boolean](len)
             copy[Boolean](data, 0, value, anyToBoolean)
             data
-          }
         }
       case _ =>
         value match {
           case array: Array[String] => array
-          case _ => {
+          case _ =>
             val data = Array.ofDim[String](len)
             copy[String](data, 0, value, anyToString)
             data
-          }
         }
     }
     result.asInstanceOf[Array[T]]
   }
 
   private def copy[T](data: Array[T], pos: Int, value: Any, converter: Any => T): Int = value match {
-    case seq: Seq[_] => {
+    case seq: Seq[_] =>
       var idx = pos
       seq.foreach {
         x =>
           idx = copy(data, idx, x, converter)
       }
       idx
-    }
-    case _           => {
+    case _           =>
       data.update(pos, converter(value))
       pos + 1
-    }
   }
 
   private def convertShape(shape: Seq[_]): Array[Long] = {
@@ -552,6 +528,158 @@ class OnnxModel(val session: OrtSession, val env: OrtEnvironment) extends Predic
     case OnnxJavaType.BFLOAT16=> "BF16"
     case _                    => "UNKNOWN"
   }
+
+  override def warmup(): Unit = {
+    val (warmupCount, warmupDataType) = warmupConfig()
+    if (warmupCount > 0) {
+      log.info(s"Warmup for the model $modelName:$modelVersion initialized: warmup-count=$warmupCount, warmup-data-type=$warmupDataType")
+      val start = System.currentTimeMillis()
+      var i = 0
+      var nSuccess = 0
+      warmupDataType match {
+        case Constants.CONFIG_WARMUP_DATA_TYPE_ZERO =>
+          try {
+            val carrier = makeCarrier()
+            while (i < warmupCount) {
+              val zeroRecord = getZeroData(carrier)
+              Using.Manager { use =>
+                val wrapper = use(zeroRecord)
+                use(session.run(wrapper.inputs, outputNames))
+                nSuccess += 1
+              }
+              i += 1
+            }
+          } catch {
+            case ex: Exception => log.warn("Warmup failed for the model ${modelName}:${modelVersion} when making prediction against the zero data", ex)
+          }
+        case _ =>
+          val carrier = makeCarrier()
+          while (i < warmupCount) {
+            try {
+              val randomRecord = getRandomData(carrier)
+              Using.Manager { use =>
+                val wrapper = use(randomRecord)
+                use(session.run(wrapper.inputs, outputNames))
+                nSuccess += 1
+              }
+            } catch {
+              case ex: Exception =>
+                log.warn("Warmup failed for the model ${modelName}:${modelVersion} when making prediction against a random data", ex)
+            }
+            i += 1
+          }
+      }
+
+      log.info(s"Warmup for the model $modelName:$modelVersion finished in ${System.currentTimeMillis() - start} milliseconds: $i submitted, $nSuccess succeeded")
+    }
+  }
+
+  private def makeCarrier(): java.util.HashMap[String, Any] = {
+    val len = inputTensors.length
+    val result = new java.util.HashMap[String, Any](len)
+    var i = 0
+    while (i < len) {
+      val tensor = inputTensors(i)
+      val name = tensor.name
+      val tensorInfo = tensor.info
+      val len = Utils.elementCount(tensorInfo.getShape).toInt
+      val input = tensorInfo.`type` match {
+        case OnnxJavaType.FLOAT | OnnxJavaType.BFLOAT16 | OnnxJavaType.FLOAT16 =>
+          new Array[Float](len)
+        case OnnxJavaType.DOUBLE =>
+          new Array[Double](len)
+        case OnnxJavaType.UINT8 | OnnxJavaType.INT8=>
+          new Array[Byte](len)
+        case OnnxJavaType.INT32 =>
+          new Array[Int](len)
+        case OnnxJavaType.INT64 =>
+          new Array[Long](len)
+        case OnnxJavaType.INT16 =>
+          new Array[Short](len)
+        case OnnxJavaType.BOOL  =>
+          new Array[Boolean](len)
+        case OnnxJavaType.STRING  =>
+          Array.fill(len)("")
+      }
+      result.put(name, input)
+      i += 1
+    }
+    result
+  }
+
+  private def getZeroData(carrier: java.util.HashMap[String, Any]): InputsWrapper = {
+    val len = inputTensors.length
+    val inputs = new java.util.HashMap[String, OnnxTensor](len)
+    var i = 0
+    while (i < len) {
+      val tensor = inputTensors(i)
+      val name = tensor.name
+      val tensorInfo = tensor.info
+      val input = carrier.get(name)
+      inputs.put(name, convertToTensor(name, tensor.info, Some(input), Some(tensorInfo.getShape.toSeq)))
+      i += 1
+    }
+    InputsWrapper(inputs)
+  }
+
+  private def getRandomData(carrier: java.util.HashMap[String, Any]): InputsWrapper = {
+    val random = new Random
+    val len = inputTensors.length
+    val inputs = new java.util.HashMap[String, OnnxTensor](len)
+    var i = 0
+    while (i < len) {
+      val tensor = inputTensors(i)
+      val name = tensor.name
+      val tensorInfo = tensor.info
+      val input = carrier.get(name)
+      var j = 0
+      input match {
+        case arr: Array[Float] =>
+          while (j < arr.length) {
+            arr(j) = random.nextFloat()
+            j += 1
+          }
+        case arr: Array[Double] =>
+          while (j < arr.length) {
+            arr(j) = random.nextDouble()
+            j += 1
+          }
+        case arr: Array[Byte] =>
+          while (j < arr.length) {
+            arr(j) = random.nextInt().toByte
+            j += 1
+          }
+        case arr: Array[Short] =>
+          while (j < arr.length) {
+            arr(j) = random.nextInt().toShort
+            j += 1
+          }
+        case arr: Array[Int] =>
+          while (j < arr.length) {
+            arr(j) = random.nextInt()
+            j += 1
+          }
+        case arr: Array[Long] =>
+          while (j < arr.length) {
+            arr(j) = random.nextLong()
+            j += 1
+          }
+        case arr: Array[Boolean] =>
+          while (j < arr.length) {
+            arr(j) = random.nextBoolean()
+            j += 1
+          }
+        case arr: Array[String] =>
+          while (j < arr.length) {
+            arr(j) = ""
+            j += 1
+          }
+      }
+      inputs.put(name, convertToTensor(name, tensor.info, Some(input), Some(tensorInfo.getShape.toSeq)))
+      i += 1
+    }
+    InputsWrapper(inputs)
+  }
 }
 
 object OnnxModel extends ModelLoader {
@@ -570,7 +698,7 @@ object OnnxModel extends ModelLoader {
       case "extended" => SessionOptions.OptLevel.EXTENDED_OPT
       case _          => SessionOptions.OptLevel.ALL_OPT
     }
-    log.info(s"ONNXRuntime optimization level: ${level}")
+    log.info(s"ONNXRuntime optimization level: $level")
     obj.setOptimizationLevel(level)
 
     // execution mode
@@ -578,32 +706,30 @@ object OnnxModel extends ModelLoader {
       case "parallel" => SessionOptions.ExecutionMode.PARALLEL
       case _          => SessionOptions.ExecutionMode.SEQUENTIAL
     }
-    log.info(s"ONNXRuntime execution mode: ${mode}")
+    log.info(s"ONNXRuntime execution mode: $mode")
     obj.setExecutionMode(mode)
 
     // execution backend
-    val gpu = (sys.props.getOrElse("gpu", "false").toLowerCase match {
+    val gpu = sys.props.getOrElse("gpu", "false").toLowerCase match {
       case "true" | "1" => true
       case _            => false
-    })
+    }
     val backend = if (gpu) "cuda" else config.getString("onnxruntime.backend").toLowerCase
-    log.info(s"ONNXRuntime execution backend: ${backend}")
+    log.info(s"ONNXRuntime execution backend: $backend")
     try {
       backend match {
         case "cuda" => obj.addCUDA(config.getInt("onnxruntime.device-id"))
         case "dnnl" => obj.addDnnl(true)
         case "tensorrt" => obj.addTensorrt(config.getInt("onnxruntime.device-id"))
         case "directml" => obj.addDirectML(config.getInt("onnxruntime.device-id"))
-        case _ => {
+        case _ =>
           val numThreads = config.getInt("onnxruntime.cpu-num-threads")
           obj.setInterOpNumThreads(if (numThreads == -1) Utils.getNumCores else numThreads)
           obj.setIntraOpNumThreads(if (numThreads == -1) Utils.getNumCores else numThreads)
-        }
       }
     } catch {
-      case ex: OrtException => {
-        log.error(s"Failed to set execution backend '${backend}', then try to use the default CPU", ex)
-      }
+      case ex: OrtException =>
+        log.error(s"Failed to set execution backend '$backend', then try to use the default CPU", ex)
       case ex: Throwable    => throw ex
     }
 
@@ -613,11 +739,14 @@ object OnnxModel extends ModelLoader {
     obj
   }
 
-  def load(path: Path): OnnxModel = {
+  def load(path: Path,
+           modelName: String,
+           modelVersion: String,
+           config: Option[Config])(implicit ec: ExecutionContext): OnnxModel = {
     try {
       val modelPath = path.toAbsolutePath.toString
       val session = env.createSession(modelPath, opts)
-      new OnnxModel(session, env)
+      new OnnxModel(session, env, modelName, modelVersion, config)
     } catch {
       case ex: java.lang.UnsatisfiedLinkError => throw OnnxRuntimeLibraryNotFoundError(ex.getMessage)
       case ex: Throwable                      => throw ex

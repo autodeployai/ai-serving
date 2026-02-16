@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2025 AutoDeployAI
+ * Copyright (c) 2019-2026 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,23 +19,36 @@ package com.autodeployai.serving.deploy
 import java.nio.file.Path
 import com.autodeployai.serving.errors.{InputNotSupportedException, InvalidModelException}
 import com.autodeployai.serving.model.{DataType, Field, InferenceRequest, InferenceResponse, PredictRequest, PredictResponse, RecordSpec, ResponseOutput}
-import com.autodeployai.serving.utils.{DataUtils, Utils}
-import org.pmml4s.common.{BooleanType, IntegerType, NumericType}
-import org.pmml4s.data.Series
+import com.autodeployai.serving.utils.{Constants, DataUtils, Utils}
+import com.typesafe.config.Config
+import org.pmml4s.common.{BooleanType, Closure, GenericInterval, IntegerType, NumericType, RealType, StringType}
+import org.pmml4s.data.{DataVal, LongVal, Series}
+import org.pmml4s.metadata.AttributeType
 import org.pmml4s.model.Model
+import org.slf4j.{Logger, LoggerFactory}
 
 import java.nio.ByteBuffer
+import scala.concurrent.ExecutionContext
+import scala.util.Random
 
 /**
  * Supports the model of Predictive Model Markup Language (PMML)
  */
-class PmmlModel(val model: Model) extends PredictModel {
+class PmmlModel(val model: Model,
+                override val modelName: String,
+                override val modelVersion: String,
+                override val config: Option[Config]) extends PredictModel {
+
+  val log: Logger = LoggerFactory.getLogger(this.getClass)
 
   private val inputSchema = model.inputSchema
 
   private val outputTypes = model.outputFields.map(x => x.name -> x.dataType).toMap
 
-  override def predict(request: PredictRequest, grpc: Boolean): PredictResponse = {
+  // Start the warmup process if it's configured properly.
+  warmup()
+
+  override def predict(request: PredictRequest): PredictResponse = {
     val filter = request.filter.orNull
 
     val result = if (request.X.records.isDefined) {
@@ -65,25 +78,23 @@ class PmmlModel(val model: Model) extends PredictModel {
     PredictResponse(result)
   }
 
-  override def predict(request: InferenceRequest, grpc: Boolean): InferenceResponse = {
+  override def predict(request: InferenceRequest): InferenceResponse = {
     val filter = request.outputs.map(x => x.map(y => y.name)).orNull
 
     val names = request.inputs.map(x => x.name)
     val data = request.inputs.map(x => x.data match {
-      case a: Array[_]        =>
-        a
+      case arr: Array[_]      => arr
       case buffer: ByteBuffer =>
         DataUtils.convertToArray(buffer, DataType.withName(x.datatype))
       case _ =>
         throw InputNotSupportedException(x.name, x.datatype)
     })
 
-    val rawOutput = if (grpc) {
-      request.parameters.flatMap(x => x.get("raw_output").map {
-        case b: Boolean => b
-        case _ => false
-      }).getOrElse(false)
-    } else false
+    // Check if the parameter raw_output is specified, it's only available for grpc endpoint
+    val rawOutput = request.parameters.flatMap(x => x.get("raw_output").map {
+      case b: Boolean => b
+      case _ => false
+    }).getOrElse(false)
 
     // Get the maximum value as the final length
     val size = data.map(x => x.length).max
@@ -119,7 +130,7 @@ class PmmlModel(val model: Model) extends PredictModel {
             tensor(i) = series(i).getLong(j)
             i += 1
           }
-          if (rawOutput) DataUtils.convertToByteArray(tensor) else tensor
+          if (rawOutput) DataUtils.convertToByteBuffer(tensor) else tensor
         case _: NumericType =>
           val tensor = Array.ofDim[Double](size)
           var i = 0
@@ -127,7 +138,7 @@ class PmmlModel(val model: Model) extends PredictModel {
             tensor(i) = series(i).getDouble(j)
             i += 1
           }
-          if (rawOutput) DataUtils.convertToByteArray(tensor) else tensor
+          if (rawOutput) DataUtils.convertToByteBuffer(tensor) else tensor
         case BooleanType =>
           val tensor = Array.ofDim[Boolean](size)
           var i = 0
@@ -135,7 +146,7 @@ class PmmlModel(val model: Model) extends PredictModel {
             tensor(i) = series(i).getBoolean(j)
             i += 1
           }
-          if (rawOutput) DataUtils.convertToByteArray(tensor) else tensor
+          if (rawOutput) DataUtils.convertToByteBuffer(tensor) else tensor
         case _ =>
           val tensor = Array.ofDim[String](size)
           var i = 0
@@ -143,6 +154,7 @@ class PmmlModel(val model: Model) extends PredictModel {
             tensor(i) = series(i).getString(j)
             i += 1
           }
+          // Ignore the flag of raw output
           tensor
       }
       outputs += ResponseOutput(name=outputColumns(j),
@@ -153,7 +165,13 @@ class PmmlModel(val model: Model) extends PredictModel {
       j += 1
     }
 
-    InferenceResponse(id=request.id, parameters=request.parameters, outputs=outputs.result())
+    InferenceResponse(
+      model_name=modelName,
+      model_version=Option(modelVersion),
+      id=request.id,
+      parameters=request.parameters,
+      outputs=outputs.result()
+    )
   }
 
   override def `type`(): String = "PMML"
@@ -188,19 +206,107 @@ class PmmlModel(val model: Model) extends PredictModel {
 
   override def close(): Unit = ()
 
-  private def toField(field: org.pmml4s.metadata.Field): Field =
+  def toField(field: org.pmml4s.metadata.Field): Field =
     Field(field.name, field.dataType.toString, Option(field.opType.toString), values = Utils.toOption(field.valuesAsString))
+
+  override def warmup(): Unit = {
+    val (warmupCount, warmupDataType) = warmupConfig()
+    if (warmupCount > 0) {
+      log.info(s"Warmup for the model $modelName:$modelVersion initialized: warmup-count=$warmupCount, warmup-data-type=$warmupDataType")
+      val start = System.currentTimeMillis()
+      var i = 0
+      var nSuccess = 0
+      warmupDataType match {
+        case Constants.CONFIG_WARMUP_DATA_TYPE_ZERO =>
+          try {
+            val zeroRecord = getZeroData
+            while (i < warmupCount) {
+              val r = model.predict(zeroRecord)
+              if (!r.anyMissing) {
+                nSuccess += 1
+              }
+              i += 1
+            }
+          } catch {
+            case ex: Exception => log.warn("Warmup failed for the model ${modelName}:${modelVersion} when making prediction against the zero data", ex)
+          }
+        case _ =>
+          while (i < warmupCount) {
+            try {
+              val randomRecord = getRandomData
+              val r = model.predict(randomRecord)
+              if (!r.anyMissing) {
+                nSuccess += 1
+              }
+            } catch {
+              case ex: Exception =>
+                log.warn("Warmup failed for the model ${modelName}:${modelVersion} when making prediction against a random data", ex)
+            }
+            i += 1
+          }
+      }
+
+      log.info(s"Warmup the model $modelName:$modelVersion finished in ${System.currentTimeMillis() - start} milliseconds: $i submitted, $nSuccess succeeded")
+    }
+  }
+
+  private def getZeroData: Series = {
+    val record = inputSchema.map(x => x.dataType match {
+      case IntegerType  => LongVal(0L)
+      case RealType     => DataVal.`0.0`
+      case BooleanType  => DataVal.FALSE
+      case StringType   => DataVal.EmptyString
+      case _: NumericType => DataVal.`0.0`
+      case _              => DataVal.NULL
+    })
+    Series.fromSeq(record, inputSchema)
+  }
+
+  private def getRandomData: Series = {
+    val random = new Random
+    val inputFields = model.inputFields
+
+    val record = inputFields.map(x => x.attrType match {
+      case AttributeType.Continuous =>
+        if (x.intervals.isEmpty) {
+          if (x.isReal) random.nextDouble() else random.nextInt()
+        } else {
+          val interval = x.intervals(random.nextInt(x.intervals.length))
+          interval match {
+            case GenericInterval(left, right, closure) =>
+              closure match {
+                case Closure.openOpen | Closure.openClosed =>
+                  random.between(left + (right - left) / 2, right)
+                case Closure.closedOpen | Closure.closedClosed =>
+                  random.between(left, right)
+              }
+            case _ =>
+              random.nextDouble()
+          }
+        }
+      case AttributeType.Categorical =>
+        if (x.validValues.length > 0 ) {
+          x.validValues(random.nextInt(x.validValues.length))
+        } else {
+          if (x.dataType.isNumeric) random.nextDouble() else ""
+        }
+      case _ => ""
+    })
+    Series.fromArray(record, inputSchema)
+  }
 }
 
 object PmmlModel extends ModelLoader {
 
-  def load(path: Path): PmmlModel = {
+  def load(path: Path,
+           modelName: String,
+           modelVersion: String,
+           config: Option[Config])(implicit ec: ExecutionContext): PmmlModel = {
     try {
       val model = Model.fromPath(path)
-      new PmmlModel(model)
+      new PmmlModel(model, modelName, modelVersion, config)
     } catch {
       case ex: Throwable => throw InvalidModelException("PMML", ex.getMessage)
     }
   }
-
 }

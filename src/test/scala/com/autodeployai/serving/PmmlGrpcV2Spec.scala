@@ -20,7 +20,7 @@ import com.autodeployai.serving.protobuf._
 import com.autodeployai.serving.utils.DataUtils
 import com.google.protobuf.ByteString
 import inference.InferParameter.ParameterChoice
-import inference.{InferTensorContents, ModelInferRequest, ModelInferResponse, ModelMetadataRequest, ModelMetadataResponse, ModelReadyRequest}
+import inference.{InferTensorContents, ModelInferRequest, ModelInferResponse, ModelMetadataRequest, ModelMetadataResponse, ModelReadyRequest, ModelReadyResponse}
 import io.grpc.Status.Code
 import io.grpc.StatusRuntimeException
 
@@ -138,15 +138,15 @@ class PmmlGrpcV2Spec extends BaseGrpcSpec {
         modelVersion = version,
         id = "42",
         parameters = Map("raw_output" -> inference.InferParameter(parameterChoice=ParameterChoice.BoolParam(true))),
-        outputs = Seq(
-          ModelInferResponse.InferOutputTensor(name = "predicted_class", datatype = "BYTES", shape = Seq(2)),
-          ModelInferResponse.InferOutputTensor(name = "probability", datatype = "FP64", shape = Seq(2)),
-          ModelInferResponse.InferOutputTensor(name = "probability_Iris-setosa", datatype = "FP64", shape = Seq(2)),
-          ModelInferResponse.InferOutputTensor(name = "probability_Iris-versicolor", datatype = "FP64", shape = Seq(2)),
-          ModelInferResponse.InferOutputTensor(name = "probability_Iris-virginica", datatype = "FP64", shape = Seq(2)),
-          ModelInferResponse.InferOutputTensor(name = "node_id", datatype = "BYTES", shape = Seq(2))
+        outputs = Vector(
+          ModelInferResponse.InferOutputTensor(name = "predicted_class", datatype = "BYTES", shape = Vector(2)),
+          ModelInferResponse.InferOutputTensor(name = "probability", datatype = "FP64", shape = Vector(2)),
+          ModelInferResponse.InferOutputTensor(name = "probability_Iris-setosa", datatype = "FP64", shape = Vector(2)),
+          ModelInferResponse.InferOutputTensor(name = "probability_Iris-versicolor", datatype = "FP64", shape = Vector(2)),
+          ModelInferResponse.InferOutputTensor(name = "probability_Iris-virginica", datatype = "FP64", shape = Vector(2)),
+          ModelInferResponse.InferOutputTensor(name = "node_id", datatype = "BYTES", shape = Vector(2))
         ),
-        rawOutputContents = Seq(
+        rawOutputContents = Vector(
           DataUtils.writeBinaryString(Array("Iris-setosa", "Iris-versicolor")),
           ByteString.copyFrom(DataUtils.convertToByteArray(Array(1.0, 0.9074074074074074))),
           ByteString.copyFrom(DataUtils.convertToByteArray(Array(1.0, 0.0))),
@@ -259,11 +259,11 @@ class PmmlGrpcV2Spec extends BaseGrpcSpec {
         modelVersion = version,
         id = "42",
         parameters = Map("raw_output" -> inference.InferParameter(parameterChoice=ParameterChoice.BoolParam(true))),
-        outputs = Seq(
-          ModelInferResponse.InferOutputTensor(name = "predicted_class", datatype = "BYTES", shape = Seq(2)),
-          ModelInferResponse.InferOutputTensor(name = "probability", datatype = "FP64", shape = Seq(2))
+        outputs = Vector(
+          ModelInferResponse.InferOutputTensor(name = "predicted_class", datatype = "BYTES", shape = Vector(2)),
+          ModelInferResponse.InferOutputTensor(name = "probability", datatype = "FP64", shape = Vector(2))
         ),
-        rawOutputContents = Seq(
+        rawOutputContents = Vector(
           DataUtils.writeBinaryString(Array("Iris-setosa", "Iris-versicolor")),
           ByteString.copyFrom(DataUtils.convertToByteArray(Array(1.0, 0.9074074074074074))),
         )
@@ -332,6 +332,16 @@ class PmmlGrpcV2Spec extends BaseGrpcSpec {
       blockingStub().undeploy(UndeployRequest(deployResponse.modelSpec))
     }
 
+    "return true with a deployed model" in {
+      val name = "a-pmml-model"
+      val input = getResource("single_iris_dectree.xml")
+      val deployResponse = blockingStub().deploy(DeployRequest(name, ByteString.copyFrom(Files.readAllBytes(input))))
+      val version = deployResponse.modelSpec.map(x => x.version).getOrElse("")
+      val modelReady = blockingStubV2().modelReady(ModelReadyRequest(name = name, version=version))
+
+      modelReady shouldEqual ModelReadyResponse(ready=true)
+    }
+
     "return a NOT_FOUND error with a model that does not exist" in {
       try {
         blockingStubV2().modelReady(ModelReadyRequest(name = "not-exist-model"))
@@ -353,6 +363,8 @@ class PmmlGrpcV2Spec extends BaseGrpcSpec {
 
       blockingStub().undeploy(UndeployRequest(deployResponse.modelSpec))
     }
+
+
   }
 
 }

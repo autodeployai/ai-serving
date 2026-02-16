@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2025 AutoDeployAI
+ * Copyright (c) 2019-2026 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,9 +21,10 @@ import java.nio.file.{Files, Path}
 import java.sql.Timestamp
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import com.autodeployai.serving.errors.{InvalidInputDataException, InvalidInputException}
-import com.autodeployai.serving.utils.{JsonUtils, Utils}
+import com.autodeployai.serving.utils.{Constants, DataUtils, JsonUtils, Utils}
 import spray.json._
 
+import java.nio.ByteBuffer
 import scala.collection.compat.immutable.ArraySeq
 
 trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
@@ -95,6 +96,12 @@ trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
   implicit val predictResponseFormat: RootJsonFormat[PredictResponse] = jsonFormat1(PredictResponse)
 
   implicit val serverMetadataResponseFormat: RootJsonFormat[ServerMetadataResponse] = jsonFormat3(ServerMetadataResponse)
+
+  implicit val serverLiveResponseFormat: RootJsonFormat[ServerLiveResponse] = jsonFormat1(ServerLiveResponse)
+
+  implicit val serverReadyResponseFormat: RootJsonFormat[ServerReadyResponse] = jsonFormat1(ServerReadyResponse)
+
+  implicit val modelReadyResponseFormat: RootJsonFormat[ModelReadyResponse] = jsonFormat1(ModelReadyResponse)
 
   def loadJson[T: JsonReader](filepath: Path): T = {
     new String(Files.readAllBytes(filepath), StandardCharsets.UTF_8).parseJson.convertTo[T]
@@ -171,12 +178,11 @@ trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
           JsonUtils.anyToJson(a)
       }
 
-      JsObject("name" -> JsString(a.name),
+      val members: Seq[(String, JsValue)] = Seq("name" -> JsString(a.name),
         "shape" -> a.shape.toJson,
         "datatype" -> JsString(a.datatype),
-        "parameters" -> a.parameters.toJson,
-        "data" -> data
-      )
+        "data" -> data) ++ a.parameters.map(x => "parameters" -> x.toJson).toSeq
+      JsObject(members:_*)
     }
   }
 
@@ -241,6 +247,10 @@ trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
       val data = a.data match {
         case array: Array[_]  =>
           tensorToJson(array, a.datatype)
+        case buffer: ByteBuffer =>
+          buffer.flip()
+          val array = DataUtils.convertToArray(buffer, DataType.withName(a.datatype))
+          tensorToJson(array, a.datatype)
         case _ =>
           JsonUtils.anyToJson(a)
       }
@@ -287,5 +297,31 @@ trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
         i += 1
       }
       JsArray(builder.result())
+  }
+
+  implicit object DeployConfigJsonFormat extends JsonFormat[DeployConfig] {
+    override def read(json: JsValue): DeployConfig = json match {
+      case JsObject(fields) =>
+        DeployConfig(
+          requestTimeoutMs=fields.get(Constants.CONFIG_REQUEST_TIMEOUT_MS).map(_.convertTo[Long]),
+          maxBatchSize=fields.get(Constants.CONFIG_MAX_BATCH_SIZE).map(_.convertTo[Int]),
+          maxBatchDelayMs=fields.get(Constants.CONFIG_MAX_BATCH_DELAY_MS).map(_.convertTo[Long]),
+          warmupCount=fields.get(Constants.CONFIG_WARMUP_COUNT).map(_.convertTo[Int]),
+          warmupDataType=fields.get(Constants.CONFIG_WARMUP_DATA_TYPE).map(_.convertTo[String])
+        )
+      case _                =>
+        throw DeserializationException("Object expected")
+    }
+
+    override def write(obj: DeployConfig): JsValue = {
+      val members = Seq(
+        Constants.CONFIG_REQUEST_TIMEOUT_MS -> obj.requestTimeoutMs.map(_.toJson),
+        Constants.CONFIG_MAX_BATCH_SIZE -> obj.maxBatchSize.map(_.toJson),
+        Constants.CONFIG_MAX_BATCH_DELAY_MS -> obj.maxBatchDelayMs.map(_.toJson),
+        Constants.CONFIG_WARMUP_COUNT -> obj.warmupCount.map(_.toJson),
+        Constants.CONFIG_WARMUP_DATA_TYPE -> obj.warmupDataType.map(_.toJson)
+      ).filter(x => x._2.isDefined).map(x=> x._1 -> x._2.get)
+      JsObject(members: _*)
+    }
   }
 }

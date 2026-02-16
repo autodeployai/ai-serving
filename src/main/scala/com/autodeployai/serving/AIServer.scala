@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2025 AutoDeployAI
+ * Copyright (c) 2019-2026 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +21,16 @@ import akka.dispatch.MessageDispatcher
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
-import com.autodeployai.serving.deploy.ModelManager
+import com.autodeployai.serving.deploy.InferenceService
 import com.autodeployai.serving.http.{Endpoints, EndpointsV2}
-import com.autodeployai.serving.protobuf.GrpcServer
+import com.autodeployai.serving.grpc.GrpcServer
 import com.autodeployai.serving.utils.Utils
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import org.slf4j.{Logger, LoggerFactory}
 
+/**
+ * Entrypoint of AI serving services
+ */
 object AIServer extends Endpoints with EndpointsV2 {
   val log: Logger = LoggerFactory.getLogger(this.getClass)
 
@@ -52,8 +55,8 @@ object AIServer extends Endpoints with EndpointsV2 {
   def start(args: Array[String]): Unit = {
 
     // load all models into memory
-    ModelManager.loadModels()
-    log.info(ModelManager.summaries)
+    InferenceService.loadModels()
+    log.info(InferenceService.summaries)
 
     val host = config.getString("service.http.interface")
     val httpPort = config.getInt("service.http.port")

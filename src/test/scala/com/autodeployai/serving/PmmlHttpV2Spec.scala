@@ -20,7 +20,7 @@ import spray.json._
 import akka.http.scaladsl.model.ContentTypes._
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.{HttpEntity, StatusCodes}
-import com.autodeployai.serving.model.{InferenceResponse, MetadataTensor, ModelMetadataV2, ResponseOutput}
+import com.autodeployai.serving.model.{DeployConfig, InferenceResponse, MetadataTensor, ModelMetadataV2, ModelReadyResponse, ResponseOutput}
 
 class PmmlHttpV2Spec extends BaseHttpSpec {
 
@@ -93,7 +93,7 @@ class PmmlHttpV2Spec extends BaseHttpSpec {
 
     "return a prediction response for POST requests to /v2/models/${MODEL_NAME}/infer" in {
       val name = "a-pmml-model"
-      deployModel(name, "single_iris_dectree.xml", `text/xml(UTF-8)`)
+      val deployResponse = deployModel(name, "single_iris_dectree.xml", `text/xml(UTF-8)`)
 
       Post(s"/v2/models/${name}/infer", HttpEntity(`application/json`,
         """{"id": "42",
@@ -107,6 +107,7 @@ class PmmlHttpV2Spec extends BaseHttpSpec {
         addHeader(RawHeader("Content-Type", "application/json")) ~> route ~> check {
         val expected = InferenceResponse(
           model_name = name,
+          model_version = Option(deployResponse.version),
           id = Some("42"),
           outputs = Seq(
             ResponseOutput(name = "predicted_class", shape = Seq(2), datatype = "BYTES", data = Array("Iris-setosa", "Iris-versicolor")),
@@ -177,10 +178,12 @@ class PmmlHttpV2Spec extends BaseHttpSpec {
 
       Get(s"/v2/models/${name}/versions/${deployResponse.version}/ready") ~> route ~> check {
         status shouldEqual StatusCodes.OK
+        responseAs[ModelReadyResponse] shouldEqual ModelReadyResponse(true)
       }
 
       Get(s"/v2/models/${name}/versions/${deployResponse2.version}/ready") ~> route ~> check {
         status shouldEqual StatusCodes.OK
+        responseAs[ModelReadyResponse] shouldEqual ModelReadyResponse(true)
       }
 
       undeployModel(name)
@@ -192,6 +195,7 @@ class PmmlHttpV2Spec extends BaseHttpSpec {
 
       Get(s"/v2/models/${name}/ready") ~> route ~> check {
         status shouldEqual StatusCodes.OK
+        responseAs[ModelReadyResponse] shouldEqual ModelReadyResponse(true)
       }
 
       undeployModel(name)

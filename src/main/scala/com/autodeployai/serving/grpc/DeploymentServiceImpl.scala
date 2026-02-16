@@ -14,24 +14,25 @@
  * limitations under the License.
  */
 
-package com.autodeployai.serving.protobuf
+package com.autodeployai.serving.grpc
 
 import com.autodeployai.serving.AIServer.executionContext
-import com.autodeployai.serving.deploy.ModelManager
+import com.autodeployai.serving.deploy.InferenceService
 import com.autodeployai.serving.errors.ErrorHandler.grpcHandler
-import com.autodeployai.serving.utils.{IOUtils, Utils}
+import com.autodeployai.serving.protobuf
+import com.autodeployai.serving.utils.Utils
 import io.grpc.{Status, StatusRuntimeException}
 
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
-class DeploymentServiceImpl extends DeploymentServiceGrpc.DeploymentService {
+class DeploymentServiceImpl extends protobuf.DeploymentServiceGrpc.DeploymentService {
 
-  override def validate(request: ValidateRequest): Future[ModelInfo] = {
-    val path = IOUtils.write(Utils.tempPath(), request.model)
+  override def validate(request: protobuf.ValidateRequest): Future[protobuf.ModelInfo] = {
+    val path = Utils.write(Utils.tempFilePath(), request.model)
     val modelType = Utils.inferModelType(path, Utils.toOption(request.`type`))
 
-    ModelManager.validate(path, modelType).transform { result =>
+    InferenceService.validate(path, modelType).transform { result =>
         Utils.safeDelete(path)
         result match {
           case Success(value)     =>
@@ -42,10 +43,10 @@ class DeploymentServiceImpl extends DeploymentServiceGrpc.DeploymentService {
     }
   }
 
-  override def deploy(request: DeployRequest): Future[DeployResponse] = {
-    val path = IOUtils.write(Utils.tempPath(), request.model)
+  override def deploy(request: protobuf.DeployRequest): Future[protobuf.DeployResponse] = {
+    val path = Utils.write(Utils.tempFilePath(), request.model)
     val modelType = Utils.inferModelType(path, Utils.toOption(request.`type`))
-    ModelManager.deploy(path, modelType, request.name).transform { result =>
+    InferenceService.deploy(path, modelType, request.name, request.config.map(fromPb)).transform { result =>
         Utils.safeDelete(path)
         result match {
           case Success(value)     =>
@@ -56,19 +57,19 @@ class DeploymentServiceImpl extends DeploymentServiceGrpc.DeploymentService {
     }
   }
 
-  override def undeploy(request: UndeployRequest): Future[UndeployResponse] = {
+  override def undeploy(request: protobuf.UndeployRequest): Future[protobuf.UndeployResponse] = {
     val modelSpec = ensureModelSpec(request.modelSpec)
-    ModelManager.undeploy(modelSpec.name).transform {
+    InferenceService.undeploy(modelSpec.name).transform {
       case Success(_)         =>
-        Success(UndeployResponse(request.modelSpec))
+        Success(protobuf.UndeployResponse(request.modelSpec))
       case Failure(exception) =>
         Failure(grpcHandler(exception))
     }
   }
 
-  override def predict(request: PredictRequest): Future[PredictResponse] = {
+  override def predict(request: protobuf.PredictRequest): Future[protobuf.PredictResponse] = {
     val modelSpec = ensureModelSpec(request.modelSpec)
-    ModelManager.predict(fromPb(request), modelSpec.name, Utils.toOption(modelSpec.version), grpc = true).
+    InferenceService.predict(fromPb(request), modelSpec.name, Utils.toOption(modelSpec.version)).
       map(x => toPb(x).withModelSpec(modelSpec)).
       transform {
       case Success(result)    =>
@@ -78,28 +79,28 @@ class DeploymentServiceImpl extends DeploymentServiceGrpc.DeploymentService {
     }
   }
 
-  override def getModelMetadata(request: GetModelMetadataRequest): Future[GetModelMetadataResponse] = request.modelSpec match {
+  override def getModelMetadata(request: protobuf.GetModelMetadataRequest): Future[protobuf.GetModelMetadataResponse] = request.modelSpec match {
     case Some(modelSpec) if Utils.nonEmpty(modelSpec.name) =>
-      ModelManager.getMetadata(modelSpec.name).
+      InferenceService.getMetadata(modelSpec.name).
         map(x => toPb(x)).
         transform {
         case Success(value)     =>
-          Success(GetModelMetadataResponse(request.modelSpec, metadata = Seq(value)))
+          Success(protobuf.GetModelMetadataResponse(request.modelSpec, metadata = Seq(value)))
         case Failure(exception) =>
           Failure(grpcHandler(exception))
       }
     case _                                                 =>
-      ModelManager.getMetadataAll().
+      InferenceService.getMetadataAll().
         map(x => x.map(toPb)).
         transform {
         case Success(value)     =>
-          Success(GetModelMetadataResponse(metadata = value))
+          Success(protobuf.GetModelMetadataResponse(metadata = value))
         case Failure(exception) =>
           Failure(grpcHandler(exception))
       }
   }
 
-  private def ensureModelSpec(modelSpec: Option[ModelSpec]): ModelSpec = modelSpec match {
+  private def ensureModelSpec(modelSpec: Option[protobuf.ModelSpec]): protobuf.ModelSpec = modelSpec match {
     case Some(value) if Utils.nonEmpty(value.name) => value
     case _                                         =>
       throw new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Missing model spec or name in the input request"))

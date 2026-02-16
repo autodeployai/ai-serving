@@ -15,10 +15,10 @@
  */
 package com.autodeployai.serving.http
 
-import akka.http.scaladsl.model.{HttpEntity, HttpResponse, StatusCodes}
+import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpResponse, StatusCodes}
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
-import com.autodeployai.serving.deploy.ModelManager
+import com.autodeployai.serving.deploy.InferenceService
 import com.autodeployai.serving.errors.ErrorHandler.{defaultExceptionHandler, defaultRejectionHandler}
 import com.autodeployai.serving.model.{InferenceRequest, JsonSupport}
 import com.autodeployai.serving.utils.Utils
@@ -39,7 +39,7 @@ trait EndpointsV2 extends JsonSupport with HttpSupport {
     get {
       complete(HttpResponse(
         status = StatusCodes.OK,
-        entity = HttpEntity.Empty))
+        entity = HttpEntity(ContentTypes.`application/json`, """{"live":true}""")))
     }
   }
 
@@ -52,7 +52,7 @@ trait EndpointsV2 extends JsonSupport with HttpSupport {
     get {
       complete(HttpResponse(
         status = StatusCodes.OK,
-        entity = HttpEntity.Empty))
+        entity = HttpEntity(ContentTypes.`application/json`, Utils.readyJson(true))))
     }
   }
 
@@ -68,10 +68,10 @@ trait EndpointsV2 extends JsonSupport with HttpSupport {
       handleExceptions(defaultExceptionHandler) {
         handleRejections(defaultRejectionHandler) {
             get {
-              onSuccess(ModelManager.isModelReady(modelName)) { ready =>
+              onSuccess(InferenceService.isModelReady(modelName)) { ready =>
                 complete(HttpResponse(
-                  status = if (ready) StatusCodes.OK else StatusCodes.BadRequest,
-                  entity = HttpEntity.Empty))
+                  status = StatusCodes.OK,
+                  entity = HttpEntity(ContentTypes.`application/json`, Utils.readyJson(ready))))
               }
             }
         }
@@ -92,10 +92,10 @@ trait EndpointsV2 extends JsonSupport with HttpSupport {
         handleExceptions(defaultExceptionHandler) {
           handleRejections(defaultRejectionHandler) {
             get {
-              onSuccess(ModelManager.isModelReady(modelName, Some(modelVersion))) { ready =>
+              onSuccess(InferenceService.isModelReady(modelName, Some(modelVersion))) { ready =>
                 complete(HttpResponse(
-                  status = if (ready) StatusCodes.OK else StatusCodes.BadRequest,
-                  entity = HttpEntity.Empty))
+                  status = StatusCodes.OK,
+                  entity = HttpEntity(ContentTypes.`application/json`, Utils.readyJson(ready))))
               }
             }
           }
@@ -131,7 +131,7 @@ trait EndpointsV2 extends JsonSupport with HttpSupport {
       handleExceptions(defaultExceptionHandler) {
         handleRejections(defaultRejectionHandler) {
           get {
-            onSuccess(ModelManager.getMetadataV2(modelName)) { result =>
+            onSuccess(InferenceService.getMetadataV2(modelName)) { result =>
               complete(result)
             }
           }
@@ -156,7 +156,7 @@ trait EndpointsV2 extends JsonSupport with HttpSupport {
         handleExceptions(defaultExceptionHandler) {
           handleRejections(defaultRejectionHandler) {
             get {
-              onSuccess(ModelManager.getMetadataV2(modelName, Some(modelVersion))) { result =>
+              onSuccess(InferenceService.getMetadataV2(modelName, Some(modelVersion))) { result =>
                 complete(result)
               }
             }
@@ -180,7 +180,7 @@ trait EndpointsV2 extends JsonSupport with HttpSupport {
           handleRejections(defaultRejectionHandler) {
             post {
               entity(as[InferenceRequest]) { request =>
-                onSuccess(ModelManager.predict(request, modelName, None, grpc = false)) { result =>
+                onSuccess(InferenceService.predict(request, modelName, None)) { result =>
                   complete(result)
                 }
               }
@@ -206,7 +206,7 @@ trait EndpointsV2 extends JsonSupport with HttpSupport {
           handleRejections(defaultRejectionHandler) {
             post {
               entity(as[InferenceRequest]) { request =>
-                onSuccess(ModelManager.predict(request, modelName, Some(modelVersion), grpc = false)) { result =>
+                onSuccess(InferenceService.predict(request, modelName, Some(modelVersion))) { result =>
                   complete(result)
                 }
               }

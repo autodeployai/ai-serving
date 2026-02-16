@@ -19,6 +19,7 @@ package com.autodeployai.serving
 import java.nio.file.Files
 import protobuf.Value.Kind
 import protobuf._
+import grpc._
 import com.autodeployai.serving.model.ModelInfo
 import com.google.protobuf.ByteString
 

@@ -19,7 +19,7 @@ package com.autodeployai.serving
 import akka.http.scaladsl.model.ContentTypes._
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.{HttpEntity, StatusCodes}
-import com.autodeployai.serving.model.{ModelInfo, ModelMetadata, PredictResponse, RecordSpec}
+import com.autodeployai.serving.model.{DeployConfig, ModelInfo, ModelMetadata, PredictResponse, RecordSpec}
 
 class PmmlHttpSpec extends BaseHttpSpec {
 
@@ -130,7 +130,19 @@ class PmmlHttpSpec extends BaseHttpSpec {
       undeployModel("a-pmml-model")
       undeployModel("b-pmml-model")
     }
+
+    "deploy a PMML model with warmup enabled using zero data" in {
+      val name = "a-pmml-model"
+      val deployConfig = DeployConfig(warmupCount=Some(100), warmupDataType=Some("zero"))
+      deployModelWithConfig(name, "single_iris_dectree.xml", `text/xml(UTF-8)`, deployConfig)
+      undeployModel(name)
+    }
+
+    "deploy a PMML model with warmup enabled using random data" in {
+      val name = "a-pmml-model"
+      val deployConfig = DeployConfig(warmupCount=Some(100), warmupDataType=Some("random"))
+      deployModelWithConfig(name, "single_iris_dectree.xml", `text/xml(UTF-8)`, deployConfig)
+      undeployModel(name)
+    }
   }
-
-
 }

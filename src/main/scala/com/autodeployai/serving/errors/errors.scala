@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024 AutoDeployAI
+ * Copyright (c) 2019-2026 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,3 +57,6 @@ case class InvalidInputException(field: String, shape: Seq[Long], elementCount: 
 
 case class InvalidInputDataException(field: String) extends
   BaseException(s"The input ${field} tensor data expected but scalar or map got")
+
+case class InferTimeoutException(modelName: String, modelVersion: Option[String], timeout: Long) extends
+  BaseException(s"Request to $modelName:${modelVersion.getOrElse("latest")} exceeded timeout of ${timeout} milliseconds")

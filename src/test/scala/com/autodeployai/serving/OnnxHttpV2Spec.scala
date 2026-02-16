@@ -19,13 +19,11 @@ package com.autodeployai.serving
 import akka.http.scaladsl.model.ContentTypes.{`application/json`, `application/octet-stream`, `text/xml(UTF-8)`}
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.{HttpEntity, StatusCodes}
-import com.autodeployai.serving.model.{InferenceResponse, MetadataTensor,  ModelMetadataV2}
+import com.autodeployai.serving.model.{DeployConfig, InferenceResponse, MetadataTensor, ModelMetadataV2}
 
 class OnnxHttpV2Spec extends BaseHttpSpec {
 
   // The model is ONNX 1.3 from https://github.com/onnx/models/tree/master/vision/classification/mnist
-  // NOTE: Test cases are disabled by default because users need to configure libraries of Onnx Runtime before running them
-  // You can remove the Ignore annotation above the test Class to free all them all
 
   "The HTTP service V2 of serving ONNX" should {
 

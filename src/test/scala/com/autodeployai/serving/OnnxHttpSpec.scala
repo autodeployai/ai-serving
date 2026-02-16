@@ -23,7 +23,7 @@ import akka.http.scaladsl.model.ContentTypes.{`application/json`, `application/o
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.{HttpEntity, StatusCodes}
 import akka.util.ByteString
-import com.autodeployai.serving.model.{ModelInfo, PredictResponse}
+import com.autodeployai.serving.model.{DeployConfig, ModelInfo, PredictResponse}
 import com.autodeployai.serving.utils.Utils
 
 import scala.concurrent.Future
@@ -161,6 +161,20 @@ class OnnxHttpSpec extends BaseHttpSpec {
         }
       }
 
+      undeployModel(name)
+    }
+
+    "deploy an ONNX model with warmup enabled using zero data" in {
+      val name = "a-pmml-model"
+      val deployConfig = DeployConfig(warmupCount=Some(100), warmupDataType=Some("zero"))
+      deployModelWithConfig(name, "mnist.onnx", `application/octet-stream`, deployConfig)
+      undeployModel(name)
+    }
+
+    "deploy an ONNX model with warmup enabled using random data" in {
+      val name = "a-pmml-model"
+      val deployConfig = DeployConfig(warmupCount=Some(100), warmupDataType=Some("random"))
+      deployModelWithConfig(name, "mnist.onnx", `application/octet-stream`, deployConfig)
       undeployModel(name)
     }
   }

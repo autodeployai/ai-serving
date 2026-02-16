@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2025 AutoDeployAI
+ * Copyright (c) 2019-2026 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,9 @@ import java.nio.file.{Files, Path}
 import java.security.{DigestInputStream, MessageDigest}
 import java.util.Comparator
 import akka.http.scaladsl.model.ContentType
+import com.autodeployai.serving.deploy.InferenceService
 import com.autodeployai.serving.model.ServerMetadataResponse
+import com.google.protobuf.ByteString
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.util.jar.Attributes.Name
@@ -36,12 +38,10 @@ object Utils {
 
   val log: Logger = LoggerFactory.getLogger(this.getClass)
 
-  def getFileExtension(filename: String, default: String = ""): String = {
-    val dotIdx = filename.lastIndexOf('.')
-    if (dotIdx == -1) {
-      default
-    } else {
-      filename.substring(dotIdx)
+  def write(path: Path, bytes: ByteString): Path = {
+    using(Files.newOutputStream(path)) { os =>
+      bytes.writeTo(os)
+      path
     }
   }
 
@@ -76,7 +76,6 @@ object Utils {
     }
   }
 
-
   def toOption(s: String): Option[String] = {
     Option(s) filterNot {
       _.isEmpty
@@ -104,8 +103,13 @@ object Utils {
     true
   }
 
-  def tempPath(prefix: String = "ai-serving-uploaded-", suffix: String = ".tmp"): Path = {
+  def tempFilePath(prefix: String, suffix: String): Path = {
     Files.createTempFile(prefix, suffix)
+  }
+
+  def tempFilePath(): Path = {
+    val prefix = s"ai-serving-uploaded-${System.currentTimeMillis()}-"
+    tempFilePath(prefix, ".tmp")
   }
 
   def md5Hash(path: Path): Option[String] = Try {
@@ -176,6 +180,11 @@ object Utils {
 
   def isDynamicShape(shape: Array[Long]): Boolean = shape.contains(-1L)
 
+  def supportDynamicBatch(shapes: Seq[Option[Seq[Long]]]): Boolean = {
+    shapes.forall(x => x.exists(shape =>
+      shape.nonEmpty && shape.head == -1L && !shape.tail.contains(-1L)))
+  }
+
   @tailrec
   private def dimensionOfValue(value: Any, result: ArrayBuffer[Long]): Unit = value match {
     case seq: Seq[_]     => {
@@ -195,12 +204,12 @@ object Utils {
     case _               =>
   }
 
-  def getComponentClass(arr: Array[_]): Class[_] = {
+  private def getComponentClass(arr: Array[_]): Class[_] = {
     getComponentClass(arr.getClass)
   }
 
   @tailrec
-  def getComponentClass(clazz: Class[_]): Class[_] = {
+  private def getComponentClass(clazz: Class[_]): Class[_] = {
     if (clazz.isArray) {
       getComponentClass(clazz.getComponentType)
     } else clazz
@@ -212,7 +221,7 @@ object Utils {
     result.result()
   }
 
-  def flattenSeq(seq: Seq[Any], output: mutable.Builder[Any, IndexedSeq[Any]]): Unit = {
+  private def flattenSeq(seq: Seq[Any], output: mutable.Builder[Any, IndexedSeq[Any]]): Unit = {
     seq.foreach {
       case s: Seq[_] => flattenSeq(s, output)
       case a: Array[_] => flattenSeq(a.toSeq, output)
@@ -220,7 +229,7 @@ object Utils {
     }
   }
 
-  def flatten(arr: Array[_]): Any = {
+  def flatten(arr: Array[_]): Array[_] = {
     val clazz = getComponentClass(arr)
     val output = Array.newBuilder[Any](ClassTag(clazz))
     output.sizeHint(elementCount(shapeOfValue(arr)).toInt)
@@ -228,7 +237,7 @@ object Utils {
     output.result()
   }
 
-  def flattenArray(arr: Array[_], output: mutable.ArrayBuilder[Any]): Unit = {
+  private def flattenArray(arr: Array[_], output: mutable.ArrayBuilder[Any]): Unit = {
     if (arr.getClass.getComponentType.isArray) {
       var i = 0
       while (i < arr.length) {
@@ -314,5 +323,10 @@ object Utils {
       name = name,
       version = version
     )
+  }
+
+  def readyJson(ready: Boolean): String = {
+    val flag = if (ready) "true" else "false"
+    s"""{"ready":$flag}"""
   }
 }

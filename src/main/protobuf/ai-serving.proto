@@ -43,6 +43,20 @@ message DeployRequest {
     string name = 1;
     bytes model = 2;
     string type = 3;
+    DeployConfig config = 4;
+}
+
+message DeployConfig {
+    // Request timeout in milliseconds
+    int64 request_timeout_ms = 1;
+    // Max batch size
+    int32 max_batch_size = 2;
+    // Max batch delay in milliseconds
+    int64 max_batch_delay_ms = 3;
+    // Warmup count
+    int32 warmup_count = 4;
+    // Warmup data type: random and zero
+    string warmup_data_type = 5;
 }
 
 message DeployResponse {
