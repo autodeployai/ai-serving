@@ -43,8 +43,14 @@ Serving AI/ML models in the open standard formats [PMML](http://dmg.org/pmml/v4-
 
 ## Features
 
-AI Serving is a flexible, high-performance inferencing system for machine learning and deep learning models, designed for production environments. AI Serving provides out-of-the-box integration with PMML and ONNX models, but can be easily extended to serve other formats of models.
+AI-Serving is a flexible, high-performance inference system for machine learning and deep learning models, designed for production environments. AI-Serving is a flexible, high-performance inference system for machine learning and deep learning models, designed for production environments.
 
+- Out-of-the-box support for PMML and ONNX models.
+- HTTP and gRPC APIs for seamless integration.
+- Support for both v1 and v2 APIs, with the v2 API fully compatible with the [Open Inference Protocol](https://github.com/kserve/open-inference-protocol).
+- Automatic batching to improve GPU utilization and increase throughput, applicable to only ONNX models.
+- Configurable request timeouts for better control in production.
+- Automatic model warm-up before handling inference requests.
 
 ## Prerequisites
 
@@ -158,8 +164,16 @@ There are two ways to deploy a PMML or ONNX model into AI-Serving: manual deploy
   3. Inside the model name directory, create a subdirectory for the model version (for example, 1, 2, etc.).
   4. Place the model file into the version directory:
      - Use the fixed filename `model.pmml` for PMML models.
-     - Use the fixed filename `model.onnx` for ONNX models. 
-  5. All models placed in this directory structure will be automatically loaded when AI-Serving starts.
+     - Use the fixed filename `model.onnx` for ONNX models.
+  5. Customized inference behavior can be configured in model.conf, which can be placed either in the model directory or within a specific version directory. The following parameters are supported:
+```
+max-batch-size=8
+max-batch-delay-ms=10
+request-timeout-ms=20
+warmup-count=100
+warmup-data-type=zero   // one of zero and random
+```
+  6. All models placed in this directory structure will be automatically loaded when AI-Serving starts.
 
 Refer to the following example for guidance:
 ```shell
@@ -170,9 +184,14 @@ Refer to the following example for guidance:
     │       └── model.pmml
     ├── mnist
     │   ├── 1
-    │   │   ├── model.onnx
-    │   ├── 2
-    │   │   ├── model.onnx
+    │   │   ├── model.conf
+    │   │   └── model.onnx
+    │   └── 2
+    │       └── model.onnx
+    ├── mobilenetv2
+    │   └── 1
+    │       └── model.onnx
+    └── model.conf
 ```
 Undeploying a model is straightforward, simply remove the corresponding model directory or the specific version directory.
 
@@ -560,12 +579,21 @@ curl -X PUT --data-binary @single_iris_dectree.xml -H "Content-Type: application
 }
 ```
 
-* ##### Deploy the PMML model
+* ##### Deploy the PMML model without configuration
 ```bash
 curl -X PUT --data-binary @single_iris_dectree.xml -H "Content-Type: application/xml"  http://localhost:9090/v1/models/iris
 {
   "name": "iris",
-  "version": 1
+  "version": "1"
+}
+```
+
+* ##### Deploy the PMML model with specified configurations
+```bash
+curl -X PUT -F "model=@single_iris_dectree.xml" -F "config=@conf.json"   http://localhost:9090/v1/models/iris
+{
+  "name": "iris",
+  "version": "2"
 }
 ```
 
