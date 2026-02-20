@@ -46,6 +46,33 @@ case class InputsWrapper(inputs: java.util.Map[String, OnnxTensor]) extends Auto
   }
 }
 
+class OnnxOptions extends RunOptions {
+  @volatile
+  private var closed: Boolean = false
+
+  private val runOptions = new ai.onnxruntime.OrtSession.RunOptions
+
+  override def terminate(): Unit = {
+    if (!closed) {
+      try {
+        runOptions.setTerminate(true)
+      } catch {
+        case e: Exception =>
+          log.warn(s"Trying to use a closed RunOptions", e)
+      }
+    }
+  }
+
+  override def close(): Unit = {
+    if (!closed) {
+      closed = true
+      safeClose(runOptions)
+    }
+  }
+
+  override def getUnderlineObject[T]: T = runOptions.asInstanceOf[T]
+}
+
 /**
  * Supports the model of Open Neural Network Exchange (ONNX)
  */
@@ -110,7 +137,7 @@ class OnnxModel(val session: OrtSession,
   // Start the warmup process if it's configured properly.
   warmup()
 
-  override def predict(request: PredictRequest): PredictResponse = {
+  override def predict(request: PredictRequest, options: RunOptions): PredictResponse = {
 
     val requestedOutput = request.filter.flatMap(x => toOption(x)).map(x => {
       val set = new util.HashSet[String]()
@@ -122,67 +149,72 @@ class OnnxModel(val session: OrtSession,
       set
     }).getOrElse(outputNames)
 
-    val result: RecordSpec = if (request.X.records.isDefined) {
-      RecordSpec(records = request.X.records.map(records => {
-        records.map(record => {
-          Using.Manager { use =>
-            val wrapper = use(createInputsWrapper(record))
-            val result = use(session.run(wrapper.inputs, requestedOutput))
+    try {
+      val result: RecordSpec = if (request.X.records.isDefined) {
+        RecordSpec(records = request.X.records.map(records => {
+          records.map(record => {
+            Using.Manager { use =>
+              val wrapper = use(createInputsWrapper(record))
+              val result = use(session.run(wrapper.inputs, requestedOutput))
 
-            val outputs = Map.newBuilder[String, Any]
-            outputs.sizeHint(result.size())
-            val it = result.iterator()
-            while (it.hasNext) {
-              val entry = it.next()
-              outputs += entry.getKey -> entry.getValue.getValue
+              val outputs = Map.newBuilder[String, Any]
+              outputs.sizeHint(result.size())
+              val it = result.iterator()
+              while (it.hasNext) {
+                val entry = it.next()
+                outputs += entry.getKey -> entry.getValue.getValue
+              }
+              outputs.result()
+            } match {
+              case Success(value) => value
+              case Failure(ex)    => throw ex
             }
-            outputs.result()
-          } match {
-            case Success(value) => value
-            case Failure(ex)    => throw ex
-          }
-        })
-      }))
-    } else {
-      val columns = request.X.columns.get
-      var outputColumns: Seq[String] = null
-      val outputColumnsBuilder = Seq.newBuilder[String]
-      outputColumnsBuilder.sizeHint(requestedOutput.size())
-      val outputData = request.X.data.map(data => {
-        data.map(values => {
-          val record = columns.zip(values).toMap
-          Using.Manager { use =>
-            val wrapper = use(createInputsWrapper(record))
-            val result = use(session.run(wrapper.inputs, requestedOutput))
+          })
+        }))
+      } else {
+        val columns = request.X.columns.get
+        var outputColumns: Seq[String] = null
+        val outputColumnsBuilder = Seq.newBuilder[String]
+        outputColumnsBuilder.sizeHint(requestedOutput.size())
+        val outputData = request.X.data.map(data => {
+          data.map(values => {
+            val record = columns.zip(values).toMap
+            Using.Manager { use =>
+              val wrapper = use(createInputsWrapper(record))
+              val result = use(session.run(wrapper.inputs, requestedOutput))
 
-            val outputs = Seq.newBuilder[Any]
-            outputs.sizeHint(result.size())
-            val it = result.iterator()
-            while (it.hasNext) {
-              val entry = it.next()
-              outputs += entry.getValue.getValue
+              val outputs = Seq.newBuilder[Any]
+              outputs.sizeHint(result.size())
+              val it = result.iterator()
+              while (it.hasNext) {
+                val entry = it.next()
+                outputs += entry.getValue.getValue
+
+                if (outputColumns == null) {
+                  outputColumnsBuilder += entry.getKey
+                }
+              }
 
               if (outputColumns == null) {
-                outputColumnsBuilder += entry.getKey
+                outputColumns = outputColumnsBuilder.result()
               }
+              outputs.result()
+            } match {
+              case Success(value)     => value
+              case Failure(exception) => throw exception
             }
-
-            if (outputColumns == null) {
-              outputColumns = outputColumnsBuilder.result()
-            }
-            outputs.result()
-          } match {
-            case Success(value)     => value
-            case Failure(exception) => throw exception
-          }
+          })
         })
-      })
-      RecordSpec(columns = Some(outputColumns), data = outputData)
+        RecordSpec(columns = Some(outputColumns), data = outputData)
+      }
+
+      PredictResponse(result)
+    } finally {
+      Utils.safeClose(options)
     }
-    PredictResponse(result)
   }
 
-  override def predict(request: InferenceRequest): InferenceResponse = {
+  override def predict(request: InferenceRequest, options: RunOptions): InferenceResponse = {
     val requestedOutput = request.outputs.map(x => {
       val set = new util.HashSet[String]()
       x.foreach(output => {
@@ -200,8 +232,13 @@ class OnnxModel(val session: OrtSession,
     }
 
     Using.Manager { use =>
+      val opt = use(options)
       val wrapper = use(createInputsWrapperV2(inputs))
-      val result = use(session.run(wrapper.inputs, requestedOutput))
+      val result = use(session.run(
+        wrapper.inputs,
+        requestedOutput,
+        opt.getUnderlineObject[ai.onnxruntime.OrtSession.RunOptions])
+      )
 
       val outputs = Seq.newBuilder[ResponseOutput]
       outputs.sizeHint(result.size())
@@ -256,6 +293,15 @@ class OnnxModel(val session: OrtSession,
       )
       case Failure(ex)    => throw ex
     }
+  }
+
+  /**
+   * Create an object of prediction options
+   *
+   * @return
+   */
+  override def newRunOptions(): OnnxOptions = {
+    new OnnxOptions
   }
 
   override def `type`(): String = "ONNX"
@@ -600,6 +646,8 @@ class OnnxModel(val session: OrtSession,
           new Array[Boolean](len)
         case OnnxJavaType.STRING  =>
           Array.fill(len)("")
+        case _ =>
+          throw UnknownDataTypeException(name)
       }
       result.put(name, input)
       i += 1

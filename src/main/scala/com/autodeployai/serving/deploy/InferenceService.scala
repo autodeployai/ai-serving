@@ -197,12 +197,14 @@ object InferenceService extends JsonSupport {
    * @return
    */
   def predict(request: PredictRequest, modelName: String, modelVersion: Option[String])(implicit ec: ExecutionContext): Future[PredictResponse] = {
+    val model = getOrLoadModel(modelName, modelVersion)
+    val runOptions = model.newRunOptions()
+
     val futureResult = Future {
-      val model = getOrLoadModel(modelName, modelVersion)
-      model.predict(request)
+      model.predict(request, runOptions)
     }
 
-    withTimeout(futureResult, modelName, modelVersion)
+    withTimeout(futureResult, modelName, modelVersion, runOptions)
   }
 
   /**
@@ -215,19 +217,19 @@ object InferenceService extends JsonSupport {
    * @return
    */
   def predict(request: InferenceRequest, modelName: String, modelVersion: Option[String])(implicit ec: ExecutionContext): Future[InferenceResponse] = {
-    val futureResult = Future {
-      val model = getOrLoadModel(modelName, modelVersion)
-      model -> model.batchProcessorV2()
-    } flatMap {
-      case (_, Some(batchProcessor)) =>
-        batchProcessor.predict(request)
-      case (model, None) =>
+    val model = getOrLoadModel(modelName, modelVersion)
+    val runOptions = model.newRunOptions()
+
+    val futureResult = model.batchProcessorV2() match {
+      case Some(batchProcessor) =>
+        batchProcessor.predict(request, runOptions)
+      case _ =>
         Future {
-          model.predict(request)
+          model.predict(request, runOptions)
         }
     }
 
-    withTimeout(futureResult, modelName, modelVersion)
+    withTimeout(futureResult, modelName, modelVersion, runOptions)
   }
 
   /**
@@ -298,7 +300,10 @@ object InferenceService extends JsonSupport {
   }
 
   /**
-   * Undeploy the specified model from ai-serving
+   * Undeploy the specified model from ai-serving.
+   *
+   * NOTE: ONNX Runtime may cause a JVM crash due to its native C++ implementation if a session is closed while it is
+   * still processing a request.
    *
    * @param modelName
    * @param ec
@@ -585,14 +590,17 @@ object InferenceService extends JsonSupport {
    * @tparam T
    * @return
    */
-  private def withTimeout[T](future: Future[T], modelName: String, modelVersion: Option[String])(implicit ec: ExecutionContext): Future[T] = {
+  private def withTimeout[T](future: Future[T], modelName: String, modelVersion: Option[String], runOptions: RunOptions)(implicit ec: ExecutionContext): Future[T] = {
     val repository = repositories.get(modelName)
     repository.flatMap(_.getTimeoutDuration(modelVersion)) match {
       case Some(timeout) =>
         val promise = Promise[T]()
         val task = new TimerTask {
           override def run(): Unit = {
-            promise.tryFailure(InferTimeoutException(modelName, modelVersion, timeout.toMillis))
+            if (!promise.isCompleted) {
+              runOptions.terminate()
+              promise.tryFailure(InferTimeoutException(modelName, modelVersion, timeout.toMillis))
+            }
           }
         }
         val timer = new Timer(true)

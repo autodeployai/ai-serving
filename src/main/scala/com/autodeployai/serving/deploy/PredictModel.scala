@@ -26,22 +26,42 @@ import com.typesafe.config.Config
 import scala.concurrent.ExecutionContext
 
 /**
+ * Used to control termination of a call of predicting
+ */
+trait RunOptions extends AutoCloseable {
+  def terminate(): Unit
+
+  def getUnderlineObject[T]: T
+}
+
+/**
  * Predictable model supporting `predict`
  */
 trait Predictable {
+
   /**
-   *  Predicting API v1
-   * @param request The input payload to predict
+   *  Create an object of prediction options
    * @return
    */
-  def predict(request: PredictRequest): PredictResponse
+  def newRunOptions(): RunOptions
+
+  /**
+   *  Predicting API v1
+   *
+   * @param request The input payload to predict
+   * @param options The PredictOptions to control this run
+   * @return The inferred outputs
+   */
+  def predict(request: PredictRequest, options: RunOptions): PredictResponse
 
   /**
    * Predicting API v2
+   *
    * @param request The input payload to predict
-   * @return
+   * @param options The PredictOptions to control this run
+   * @return The inferred outputs
    */
-  def predict(request: InferenceRequest): InferenceResponse
+  def predict(request: InferenceRequest, options: RunOptions): InferenceResponse
 }
 
 trait ModelLoader {

@@ -156,9 +156,8 @@ object Utils {
         resource.close()
       }
     } catch {
-      case e: Exception => {
+      case e: Exception =>
         log.warn(s"Failed to close resource: ${e.getMessage}")
-      }
     }
   }
 

@@ -7,4 +7,5 @@
 **/.DS_Store
 /.history/
 /src/test/resources/response_0.pb
-
+/.bloop/
+/.metals/

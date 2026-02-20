@@ -17,7 +17,7 @@
 package com.autodeployai.serving.deploy
 
 import com.autodeployai.serving.model.{DataType, InferenceRequest, InferenceResponse}
-import com.autodeployai.serving.utils.DataUtils
+import com.autodeployai.serving.utils.{DataUtils, Utils}
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.nio.{ByteBuffer, ByteOrder, DoubleBuffer, FloatBuffer, IntBuffer, LongBuffer, ShortBuffer}
@@ -27,17 +27,20 @@ import scala.concurrent.{ExecutionContext, Future, Promise}
 trait BatchRequest[Request, Response] {
   def request: Request
   def promise: Promise[Response]
+  def options: RunOptions
   def timestamp: Long
 }
 
 case class BatchRequestV2(
   request: InferenceRequest,
   promise: Promise[InferenceResponse],
+  options: RunOptions,
   timestamp: Long = System.currentTimeMillis(),
 ) extends BatchRequest[InferenceRequest, InferenceResponse]
 
 trait BatchProcessor[Request, Response] extends AutoCloseable {
-  def predict(request: Request): Future[Response]
+
+  def predict(request: Request, options: RunOptions): Future[Response]
 
   def merge(requests: Array[Request]): Request
 
@@ -73,10 +76,10 @@ class BatchProcessorV2(model: PredictModel,
 
   log.info(s"BatchProcessor for model ${model.modelName}:${model.modelVersion} initialized: max-batch-size=$maxBatchSize, max-batch-delay-ms=$maxBatchDelayMs")
 
-  override def predict(request: InferenceRequest): Future[InferenceResponse] = {
+  override def predict(request: InferenceRequest, options: RunOptions): Future[InferenceResponse] = {
     if (enabled) {
       val promise = Promise[InferenceResponse]()
-      val batchRequest = BatchRequestV2(request=request, promise=promise)
+      val batchRequest = BatchRequestV2(request=request, promise=promise, options=options)
       queue.offer(batchRequest)
 
       if (queue.size() >= maxBatchSize) {
@@ -86,7 +89,7 @@ class BatchProcessorV2(model: PredictModel,
       }
       promise.future
     } else {
-      Future(model.predict(request))
+      Future(model.predict(request, options))
     }
   }
 
@@ -101,7 +104,7 @@ class BatchProcessorV2(model: PredictModel,
     }
   }
 
-  private def processBatch(): Unit = {
+  private def processBatch(): Unit = this.synchronized {
     val builder = Array.newBuilder[BatchRequestV2]
     builder.sizeHint(maxBatchSize)
     var exit = false
@@ -120,8 +123,11 @@ class BatchProcessorV2(model: PredictModel,
         val requests = batch.map(_.request)
         val mergedRequest = merge(requests)
 
+        // Using options of the first request
+        val options = batch.head.options
+
         val startTime = System.currentTimeMillis()
-        val batchResponse = model.predict(mergedRequest)
+        val batchResponse = model.predict(mergedRequest, options)
         log.info(s"Batched ${batch.length} requests elapsed time: ${System.currentTimeMillis() - startTime}")
 
         val recordCounts = requests.map(req => {
@@ -139,6 +145,9 @@ class BatchProcessorV2(model: PredictModel,
         case ex: Throwable =>
           log.error(s"Error processing batch for model ${model.modelName}:${model.modelVersion}ms", ex)
           batch.foreach(_.promise.failure(ex))
+      } finally {
+        // Close options of other requests
+        batch.tail.foreach(x => Utils.safeClose(x.options))
       }
     }
   }
@@ -216,11 +225,11 @@ class BatchProcessorV2(model: PredictModel,
             case buf: ByteBuffer =>
               DataUtils.convertToBooleanArray(buf.array())
           })
-          val output = new Array[String](boolArrays.map(_.length).sum)
+          val output = new Array[Boolean](boolArrays.map(_.length).sum)
           var i = 0
           var offset = 0
           while (i < boolArrays.length) {
-            val arr = boolArrays(0)
+            val arr = boolArrays(i)
             System.arraycopy(arr, 0, output, offset, arr.length)
             i += 1
             offset += arr.length
@@ -237,7 +246,7 @@ class BatchProcessorV2(model: PredictModel,
           var i = 0
           var offset = 0
           while (i < strArrays.length) {
-            val arr = strArrays(0)
+            val arr = strArrays(i)
             System.arraycopy(arr, 0, output, offset, arr.length)
             i += 1
             offset += arr.length

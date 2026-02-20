@@ -48,7 +48,7 @@ class PmmlModel(val model: Model,
   // Start the warmup process if it's configured properly.
   warmup()
 
-  override def predict(request: PredictRequest): PredictResponse = {
+  override def predict(request: PredictRequest, options: RunOptions): PredictResponse = {
     val filter = request.filter.orNull
 
     val result = if (request.X.records.isDefined) {
@@ -78,7 +78,7 @@ class PmmlModel(val model: Model,
     PredictResponse(result)
   }
 
-  override def predict(request: InferenceRequest): InferenceResponse = {
+  override def predict(request: InferenceRequest, options: RunOptions): InferenceResponse = {
     val filter = request.outputs.map(x => x.map(y => y.name)).orNull
 
     val names = request.inputs.map(x => x.name)
@@ -172,6 +172,15 @@ class PmmlModel(val model: Model,
       parameters=request.parameters,
       outputs=outputs.result()
     )
+  }
+
+  /**
+   * Create an object of prediction options
+   *
+   * @return
+   */
+  override def newRunOptions(): RunOptions = {
+    null
   }
 
   override def `type`(): String = "PMML"

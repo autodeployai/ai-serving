@@ -182,22 +182,25 @@ class OnnxHttpV2BatchSpec extends BaseHttpSpec with JsonSupport {
       val deployConfig = DeployConfig(requestTimeoutMs=Some(1))
       val deployResponse = deployModelWithConfig(name, "mobilenet_v2.onnx", `application/octet-stream`, deployConfig)
 
-      val batchInput = InferenceRequest(
-        inputs=Seq(
-          RequestInput(
-            name = "input",
-            shape = Seq(8, 3, 224, 224),
-            datatype = "FP32",
-            data = Array.fill(8)(inputArray)
+      val nLoop = 10
+      for (i <- 0 until nLoop) {
+        val batchInput = InferenceRequest(
+          inputs=Seq(
+            RequestInput(
+              name = "input",
+              shape = Seq(8, 3, 224, 224),
+              datatype = "FP32",
+              data = Array.fill(8)(inputArray)
+            )
           )
         )
-      )
-
-      Post(s"/v2/models/${name}/versions/${deployResponse.version}/infer", batchInput.copy(id=Some("timeout"))) ~> route ~> check {
-        status shouldEqual StatusCodes.GatewayTimeout
-        val actual = responseAs[com.autodeployai.serving.errors.Error]
-        println(actual.error)
+        Post(s"/v2/models/${name}/versions/${deployResponse.version}/infer", batchInput.copy(id=Some("timeout"))) ~> route ~> check {
+          status shouldEqual StatusCodes.GatewayTimeout
+          val actual = responseAs[com.autodeployai.serving.errors.Error]
+          println(actual.error)
+        }
       }
+
       undeployModel(name)
     }
 

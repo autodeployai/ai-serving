@@ -17,6 +17,7 @@
 package com.autodeployai.serving
 
 import com.autodeployai.serving.protobuf._
+import com.autodeployai.serving.utils.Utils
 import com.google.protobuf.ByteString
 import inference.InferParameter.ParameterChoice
 import inference.{InferTensorContents, ModelInferRequest, ModelInferResponse, ModelMetadataRequest, ModelMetadataResponse, ModelReadyRequest}
@@ -233,7 +234,16 @@ class OnnxGrpcV2BatchSpec extends BaseGrpcSpec {
       )
 
       try {
-        blockingStubV2().modelInfer(input.copy(modelName = name))
+        blockingStubV2().modelInfer(input.copy(modelName = name,
+          inputs=Seq(
+            ModelInferRequest.InferInputTensor(
+              name = "input",
+              datatype = "FP32",
+              shape = Seq(8, 3, 224, 224),
+              contents = Some(InferTensorContents(fp32Contents = ArraySeq.unsafeWrapArray(Utils.flatten(Array.fill(8)(inputArray)).asInstanceOf[Array[Float]])))
+            )
+          )
+        ))
       } catch {
         case ex: StatusRuntimeException => ex.getStatus.getCode shouldEqual Code.DEADLINE_EXCEEDED
       }
