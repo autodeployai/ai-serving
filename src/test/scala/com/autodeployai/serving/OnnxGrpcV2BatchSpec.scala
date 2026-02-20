@@ -120,7 +120,7 @@ class OnnxGrpcV2BatchSpec extends BaseGrpcSpec {
         actual.outputs.head.contents.get.fp32Contents shouldEqual expected.outputs.head.contents.get.fp32Contents
       }
 
-      println(s"The elapsed time of $nLoop requests with batch enabled is: ${System.currentTimeMillis() - start}")
+      log.info(s"The elapsed time of $nLoop requests with batch enabled is: ${System.currentTimeMillis() - start}")
       blockingStub().undeploy(UndeployRequest(deployResponse.modelSpec))
     }
 
@@ -160,7 +160,7 @@ class OnnxGrpcV2BatchSpec extends BaseGrpcSpec {
         actual.rawOutputContents.head shouldEqual rawExpected.rawOutputContents.head
       }
 
-      println(s"The elapsed time of $nLoop requests with batch enabled is: ${System.currentTimeMillis() - start}")
+      log.info(s"The elapsed time of $nLoop requests with batch enabled is: ${System.currentTimeMillis() - start}")
       blockingStub().undeploy(UndeployRequest(deployResponse.modelSpec))
     }
 
@@ -201,7 +201,7 @@ class OnnxGrpcV2BatchSpec extends BaseGrpcSpec {
         }
       }
 
-      println(s"The elapsed time of $nLoop requests with batch enabled is: ${System.currentTimeMillis() - start}")
+      log.info(s"The elapsed time of $nLoop requests with batch enabled is: ${System.currentTimeMillis() - start}")
       blockingStub().undeploy(UndeployRequest(deployResponse.modelSpec))
     }
 

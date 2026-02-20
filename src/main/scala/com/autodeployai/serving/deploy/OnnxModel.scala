@@ -16,6 +16,8 @@
 
 package com.autodeployai.serving.deploy
 
+import ai.onnxruntime.OrtException.OrtErrorCode
+
 import java.nio._
 import java.nio.file.Path
 import com.autodeployai.serving.utils.DataUtils._
@@ -209,7 +211,17 @@ class OnnxModel(val session: OrtSession,
       }
 
       PredictResponse(result)
-    } finally {
+    } catch {
+      case ex: OrtException =>
+        if (ex.getCode == OrtErrorCode.ORT_FAIL && ex.getMessage.contains("Exiting due to terminate flag being set to true")) {
+          log.warn(s"An error occurred from ONNXRuntime: $ex")
+          throw InferTimeoutException(modelName, Option(modelVersion))
+        } else {
+          throw ex
+        }
+      case ex: Throwable =>
+        throw ex
+      } finally {
       Utils.safeClose(options)
     }
   }
@@ -291,7 +303,17 @@ class OnnxModel(val session: OrtSession,
         parameters=request.parameters,
         outputs=value
       )
-      case Failure(ex)    => throw ex
+      case Failure(ex)    => ex match {
+        case ex: OrtException =>
+          if (ex.getCode == OrtErrorCode.ORT_FAIL && ex.getMessage.contains("Exiting due to terminate flag being set to true")) {
+            log.warn(s"An error occurred from ONNXRuntime: $ex")
+            throw InferTimeoutException(modelName, Option(modelVersion))
+          } else {
+            throw ex
+          }
+        case _ =>
+          throw ex
+      }
     }
   }
 

@@ -16,10 +16,10 @@
 
 package com.autodeployai.serving
 
-import akka.http.scaladsl.model.ContentTypes.{`application/json`, `application/octet-stream`, `text/xml(UTF-8)`}
+import akka.http.scaladsl.model.ContentTypes.{`application/json`, `application/octet-stream`}
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.{HttpEntity, StatusCodes}
-import com.autodeployai.serving.model.{DeployConfig, InferenceResponse, MetadataTensor, ModelMetadataV2}
+import com.autodeployai.serving.model.{InferenceResponse, MetadataTensor, ModelMetadataV2}
 
 class OnnxHttpV2Spec extends BaseHttpSpec {
 
@@ -32,7 +32,7 @@ class OnnxHttpV2Spec extends BaseHttpSpec {
       val deployResponse = deployModel(name, "mnist.onnx", `application/octet-stream`)
 
       val input0 = getResource("mnist_request_v2_0.json")
-      Post(s"/v2/models/${name}/versions/${deployResponse.version}/infer", HttpEntity.fromPath(`application/json`, input0)) ~>
+      Post(s"/v2/models/$name/versions/${deployResponse.version}/infer", HttpEntity.fromPath(`application/json`, input0)) ~>
         addHeader(RawHeader("Content-Type", "application/json")) ~> route ~> check {
         status shouldEqual StatusCodes.OK
         val actual = responseAs[InferenceResponse]
@@ -48,7 +48,7 @@ class OnnxHttpV2Spec extends BaseHttpSpec {
       deployModel(name, "mnist.onnx", `application/octet-stream`)
 
       val input0 = getResource("mnist_request_v2_0.json")
-      Post(s"/v2/models/${name}/infer", HttpEntity.fromPath(`application/json`, input0)) ~>
+      Post(s"/v2/models/$name/infer", HttpEntity.fromPath(`application/json`, input0)) ~>
         addHeader(RawHeader("Content-Type", "application/json")) ~> route ~> check {
         status shouldEqual StatusCodes.OK
         val actual = responseAs[InferenceResponse]
@@ -75,14 +75,14 @@ class OnnxHttpV2Spec extends BaseHttpSpec {
         )
       )
 
-      Get(s"/v2/models/${name}/versions/${deployResponse.version}") ~> route ~> check {
+      Get(s"/v2/models/$name/versions/${deployResponse.version}") ~> route ~> check {
         status shouldEqual StatusCodes.OK
         responseAs[ModelMetadataV2] shouldEqual expected
       }
 
-      Get(s"/v2/models/${name}") ~> route ~> check {
+      Get(s"/v2/models/$name") ~> route ~> check {
         status shouldEqual StatusCodes.OK
-        println(responseAs[String])
+        log.info(responseAs[String])
         responseAs[ModelMetadataV2] shouldEqual expected
       }
 

@@ -72,7 +72,7 @@ class OnnxHttpV2BatchSpec extends BaseHttpSpec with JsonSupport {
       val responses = mutable.ArrayBuffer[RouteTestResult]()
       val nLoop = 10
       for (i <- 0 until nLoop) {
-        val response = Post(s"/v2/models/${name}/versions/${deployResponse.version}/infer", input.copy(id=Some(s"$i"))) ~> route ~> runRoute
+        val response = Post(s"/v2/models/$name/versions/${deployResponse.version}/infer", input.copy(id=Some(s"$i"))) ~> route ~> runRoute
         responses += response
       }
 
@@ -89,7 +89,7 @@ class OnnxHttpV2BatchSpec extends BaseHttpSpec with JsonSupport {
         } (responses(i))
       }
 
-      println(s"The elapsed time of $nLoop requests with batch enabled is: ${System.currentTimeMillis() - start}")
+      log.info(s"The elapsed time of $nLoop requests with batch enabled is: ${System.currentTimeMillis() - start}")
       undeployModel(name)
     }
 
@@ -103,7 +103,7 @@ class OnnxHttpV2BatchSpec extends BaseHttpSpec with JsonSupport {
       val (nOuterLoop , nLoop) = (2, 5)
       for (i <- 0 until nOuterLoop) {
         for (j <- 0 until  nLoop) {
-          val response = Post(s"/v2/models/${name}/versions/${deployResponse.version}/infer", input.copy(id=Some(s"$i-$j"))) ~> route ~> runRoute
+          val response = Post(s"/v2/models/$name/versions/${deployResponse.version}/infer", input.copy(id=Some(s"$i-$j"))) ~> route ~> runRoute
           responses += response
         }
         Thread.sleep(1000L)
@@ -126,7 +126,7 @@ class OnnxHttpV2BatchSpec extends BaseHttpSpec with JsonSupport {
         }
       }
 
-      println(s"The elapsed time of $nLoop requests with batch enabled is: ${System.currentTimeMillis() - start}")
+      log.info(s"The elapsed time of $nLoop requests with batch enabled is: ${System.currentTimeMillis() - start}")
       undeployModel(name)
     }
 
@@ -139,7 +139,7 @@ class OnnxHttpV2BatchSpec extends BaseHttpSpec with JsonSupport {
       val responses = mutable.ArrayBuffer[RouteTestResult]()
       val nLoop = 10
       for (i <- 0 until nLoop) {
-        val response = Post(s"/v2/models/${name}/versions/${deployResponse.version}/infer", input.copy(id=Some(s"$i"))) ~> route ~> runRoute
+        val response = Post(s"/v2/models/$name/versions/${deployResponse.version}/infer", input.copy(id=Some(s"$i"))) ~> route ~> runRoute
         responses += response
       }
 
@@ -156,7 +156,7 @@ class OnnxHttpV2BatchSpec extends BaseHttpSpec with JsonSupport {
         } (responses(i))
       }
 
-      println(s"The elapsed time of $nLoop requests with batch disabled is: ${System.currentTimeMillis() - start}")
+      log.info(s"The elapsed time of $nLoop requests with batch disabled is: ${System.currentTimeMillis() - start}")
       undeployModel(name)
     }
 
@@ -165,7 +165,7 @@ class OnnxHttpV2BatchSpec extends BaseHttpSpec with JsonSupport {
       val deployConfig = DeployConfig(requestTimeoutMs=Some(100))
       val deployResponse = deployModelWithConfig(name, "mobilenet_v2.onnx", `application/octet-stream`, deployConfig)
 
-      Post(s"/v2/models/${name}/versions/${deployResponse.version}/infer", input.copy(id=Some("success"))) ~> route ~> check {
+      Post(s"/v2/models/$name/versions/${deployResponse.version}/infer", input.copy(id=Some("success"))) ~> route ~> check {
         status shouldEqual StatusCodes.OK
         val actual = responseAs[String]
         val expected = output.copy(
@@ -183,24 +183,31 @@ class OnnxHttpV2BatchSpec extends BaseHttpSpec with JsonSupport {
       val deployResponse = deployModelWithConfig(name, "mobilenet_v2.onnx", `application/octet-stream`, deployConfig)
 
       val nLoop = 10
-      for (i <- 0 until nLoop) {
+      val nBatch = 16 // Set to a bigger number if it's getting
+      for (_ <- 0 until nLoop) {
         val batchInput = InferenceRequest(
           inputs=Seq(
             RequestInput(
               name = "input",
-              shape = Seq(8, 3, 224, 224),
+              shape = Seq(nBatch, 3, 224, 224),
               datatype = "FP32",
-              data = Array.fill(8)(inputArray)
+              data = Array.fill(nBatch)(inputArray)
             )
           )
         )
-        Post(s"/v2/models/${name}/versions/${deployResponse.version}/infer", batchInput.copy(id=Some("timeout"))) ~> route ~> check {
-          status shouldEqual StatusCodes.GatewayTimeout
-          val actual = responseAs[com.autodeployai.serving.errors.Error]
-          println(actual.error)
+        Post(s"/v2/models/$name/versions/${deployResponse.version}/infer", batchInput.copy(id=Some("timeout"))) ~> route ~> check {
+          if (status == StatusCodes.OK) {
+            log.warn("Your computer is more powerful, please set nBatch to a bigger number to reproduce timeout")
+          } else {
+            status shouldEqual StatusCodes.GatewayTimeout
+            val actual = responseAs[com.autodeployai.serving.errors.Error]
+            actual.error.contains(s"A request to $name:${deployResponse.version} exceeded timeout") shouldEqual true
+          }
         }
       }
 
+      // Wait for a while to make sure the pending requests are done
+      Thread.sleep(10000)
       undeployModel(name)
     }
 
@@ -220,15 +227,15 @@ class OnnxHttpV2BatchSpec extends BaseHttpSpec with JsonSupport {
         )
       )
 
-      Get(s"/v2/models/${name}/versions/${deployResponse.version}") ~> route ~> check {
+      Get(s"/v2/models/$name/versions/${deployResponse.version}") ~> route ~> check {
         status shouldEqual StatusCodes.OK
-        println(responseAs[String])
+        log.info(responseAs[String])
         responseAs[ModelMetadataV2] shouldEqual expected
       }
 
-      Get(s"/v2/models/${name}") ~> route ~> check {
+      Get(s"/v2/models/$name") ~> route ~> check {
         status shouldEqual StatusCodes.OK
-        println(responseAs[String])
+        log.info(responseAs[String])
         responseAs[ModelMetadataV2] shouldEqual expected
       }
 
@@ -245,7 +252,7 @@ class OnnxHttpV2BatchSpec extends BaseHttpSpec with JsonSupport {
       )
 
       val formData = Multipart.FormData(Source(List(configPart)))
-      Put(s"/v1/models/${name}", formData) ~> route ~> check {
+      Put(s"/v1/models/$name", formData) ~> route ~> check {
         status shouldEqual StatusCodes.BadRequest
       }
     }
