@@ -606,33 +606,34 @@ class OnnxModel(val session: OrtSession,
       var nSuccess = 0
       warmupDataType match {
         case Constants.CONFIG_WARMUP_DATA_TYPE_ZERO =>
-          try {
-            val carrier = makeCarrier()
-            while (i < warmupCount) {
-              val zeroRecord = getZeroData(carrier)
-              Using.Manager { use =>
-                val wrapper = use(zeroRecord)
-                use(session.run(wrapper.inputs, outputNames))
+          val carrier = makeCarrier()
+          var failed = false
+          while (i < warmupCount && !failed) {
+            val zeroRecord = getZeroData(carrier)
+            Using.Manager { use =>
+              val wrapper = use(zeroRecord)
+              use(session.run(wrapper.inputs, outputNames))
+            } match {
+              case Success(_) =>
                 nSuccess += 1
-              }
-              i += 1
+              case Failure(ex) =>
+                failed = true
+                log.warn(s"Warmup failed for the model $modelName:$modelVersion when making prediction against the zero data", ex)
             }
-          } catch {
-            case ex: Exception => log.warn("Warmup failed for the model ${modelName}:${modelVersion} when making prediction against the zero data", ex)
+            i += 1
           }
         case _ =>
           val carrier = makeCarrier()
           while (i < warmupCount) {
-            try {
-              val randomRecord = getRandomData(carrier)
-              Using.Manager { use =>
-                val wrapper = use(randomRecord)
-                use(session.run(wrapper.inputs, outputNames))
+            val randomRecord = getRandomData(carrier)
+            Using.Manager { use =>
+              val wrapper = use(randomRecord)
+              use(session.run(wrapper.inputs, outputNames))
+            } match {
+              case Success(_) =>
                 nSuccess += 1
-              }
-            } catch {
-              case ex: Exception =>
-                log.warn("Warmup failed for the model ${modelName}:${modelVersion} when making prediction against a random data", ex)
+              case Failure(ex) =>
+                log.warn(s"Warmup failed for the model $modelName:$modelVersion when making prediction against a random data", ex)
             }
             i += 1
           }
@@ -686,7 +687,8 @@ class OnnxModel(val session: OrtSession,
       val name = tensor.name
       val tensorInfo = tensor.info
       val input = carrier.get(name)
-      inputs.put(name, convertToTensor(name, tensor.info, Some(input), Some(tensorInfo.getShape.toSeq)))
+      val shape = tensorInfo.getShape.toSeq.map(x => if (x == -1L) 1L else x)
+      inputs.put(name, convertToTensor(name, tensor.info, Some(input), Some(shape)))
       i += 1
     }
     InputsWrapper(inputs)
@@ -745,7 +747,8 @@ class OnnxModel(val session: OrtSession,
             j += 1
           }
       }
-      inputs.put(name, convertToTensor(name, tensor.info, Some(input), Some(tensorInfo.getShape.toSeq)))
+      val shape = tensorInfo.getShape.toSeq.map(x => if (x == -1L) 1L else x)
+      inputs.put(name, convertToTensor(name, tensor.info, Some(input), Some(shape)))
       i += 1
     }
     InputsWrapper(inputs)

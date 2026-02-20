@@ -91,13 +91,17 @@ class OnnxGrpcV2BatchSpec extends BaseGrpcSpec {
   "The GRPC service V2 of serving ONNX with batch/timeout config" should {
 
     "return prediction response for calling 'modelInfer' with batch enabled" in {
-      val name = "an-onnx-mobilenet-model"
+      val name = "an-onnx-mobilenet-model-batch-enabled"
       val deployResponse = blockingStub().deploy(
         DeployRequest(name,
           ByteString.copyFrom(Files.readAllBytes(getResource("mobilenet_v2.onnx"))),
           "ONNX",
-          Some(DeployConfig(maxBatchSize=8, maxBatchDelayMs=1000L)
-          )
+          Some(DeployConfig(
+            maxBatchSize=8,
+            maxBatchDelayMs=1000L,
+            warmupCount=100,
+            warmupDataType="random"
+          ))
         )
       )
       val version = deployResponse.modelSpec.map(_.version).getOrElse("")
@@ -121,6 +125,42 @@ class OnnxGrpcV2BatchSpec extends BaseGrpcSpec {
       }
 
       log.info(s"The elapsed time of $nLoop requests with batch enabled is: ${System.currentTimeMillis() - start}")
+      blockingStub().undeploy(UndeployRequest(deployResponse.modelSpec))
+    }
+
+    "return prediction response for calling 'modelInfer' with batch disabled" in {
+      val name = "an-onnx-mobilenet-model-batch-disabled"
+      val deployResponse = blockingStub().deploy(
+        DeployRequest(name,
+          ByteString.copyFrom(Files.readAllBytes(getResource("mobilenet_v2.onnx"))),
+          "ONNX",
+          Some(DeployConfig(
+            warmupCount=100,
+            warmupDataType="zero"
+          ))
+        )
+      )
+      val version = deployResponse.modelSpec.map(_.version).getOrElse("")
+
+      val start = System.currentTimeMillis()
+      val responses = mutable.ArrayBuffer[Future[inference.ModelInferResponse]]()
+      val nLoop = 10
+      for (i <- 0 until nLoop) {
+        val modelInferResponse = stubV2().modelInfer(
+          input.copy(modelName = name, modelVersion = version, id = s"$i")
+        )
+        responses += modelInferResponse
+      }
+
+      for (i <- (0 until nLoop).reverse) {
+        val actual =  Await.result(responses(i), Duration.Inf)
+        actual.id shouldEqual s"$i"
+        actual.modelName shouldEqual name
+        actual.modelVersion shouldEqual version
+        actual.outputs.head.contents.get.fp32Contents shouldEqual expected.outputs.head.contents.get.fp32Contents
+      }
+
+      log.info(s"The elapsed time of $nLoop requests with batch disabled is: ${System.currentTimeMillis() - start}")
       blockingStub().undeploy(UndeployRequest(deployResponse.modelSpec))
     }
 

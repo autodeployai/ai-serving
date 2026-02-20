@@ -64,8 +64,13 @@ class OnnxHttpV2BatchSpec extends BaseHttpSpec with JsonSupport {
   "The HTTP service V2 of serving ONNX with batch/timeout config" should {
 
     "return prediction responses with batch enabled" in {
-      val name = "an-onnx-mobilenet-model"
-      val deployConfig = DeployConfig(maxBatchSize=Some(8), maxBatchDelayMs=Some(1000L))
+      val name = "an-onnx-mobilenet-model-batch-enabled"
+      val deployConfig = DeployConfig(
+        maxBatchSize=Some(8),
+        maxBatchDelayMs=Some(1000L),
+        warmupCount=Some(100),
+        warmupDataType=Some("random")
+      )
       val deployResponse = deployModelWithConfig(name, "mobilenet_v2.onnx", `application/octet-stream`, deployConfig)
 
       val start = System.currentTimeMillis()
@@ -93,9 +98,47 @@ class OnnxHttpV2BatchSpec extends BaseHttpSpec with JsonSupport {
       undeployModel(name)
     }
 
-    "return prediction responses with batch enabled and small delay timeout" in {
-      val name = "an-onnx-mobilenet-model-batch-enabled-small-delayed"
-      val deployConfig = DeployConfig(maxBatchSize=Some(8), maxBatchDelayMs=Some(100L))
+    "return prediction responses with batch disabled" in {
+      val name = "an-onnx-mobilenet-model-batch-disabled"
+      val deployConfig = DeployConfig(
+        warmupCount=Some(100),
+        warmupDataType=Some("random")
+      )
+      val deployResponse = deployModelWithConfig(name, "mobilenet_v2.onnx", `application/octet-stream`, deployConfig)
+
+      val start = System.currentTimeMillis()
+      val responses = mutable.ArrayBuffer[RouteTestResult]()
+      val nLoop = 10
+      for (i <- 0 until nLoop) {
+        val response = Post(s"/v2/models/$name/versions/${deployResponse.version}/infer", input.copy(id=Some(s"$i"))) ~> route ~> runRoute
+        responses += response
+      }
+
+      for (i <- (0 until nLoop).reverse) {
+        check {
+          status shouldEqual StatusCodes.OK
+          val actual = responseAs[InferenceResponse]
+          val expected = output.copy(
+            model_name=name,
+            model_version=Some(deployResponse.version),
+            id=Some(s"$i"))
+          actual.id shouldEqual expected.id
+          actual.dataToSeq.outputs.head.data shouldEqual expected.dataToSeq.outputs.head.data
+        } (responses(i))
+      }
+
+      log.info(s"The elapsed time of $nLoop requests with batch disabled is: ${System.currentTimeMillis() - start}")
+      undeployModel(name)
+    }
+
+    "return prediction responses with batch with small delay timeout and warmup enabled" in {
+      val name = "an-onnx-mobilenet-model-batch-small-delayed-enabled"
+      val deployConfig = DeployConfig(
+        maxBatchSize=Some(8),
+        maxBatchDelayMs=Some(100L),
+        warmupCount=Some(100),
+        warmupDataType=Some("zero")
+      )
       val deployResponse = deployModelWithConfig(name, "mobilenet_v2.onnx", `application/octet-stream`, deployConfig)
 
       val start = System.currentTimeMillis()
@@ -127,36 +170,6 @@ class OnnxHttpV2BatchSpec extends BaseHttpSpec with JsonSupport {
       }
 
       log.info(s"The elapsed time of $nLoop requests with batch enabled is: ${System.currentTimeMillis() - start}")
-      undeployModel(name)
-    }
-
-    "return prediction responses with batch disabled" in {
-      val name = "an-onnx-mobilenet-model-batch-disabled"
-      val deployConfig = DeployConfig()
-      val deployResponse = deployModelWithConfig(name, "mobilenet_v2.onnx", `application/octet-stream`, deployConfig)
-
-      val start = System.currentTimeMillis()
-      val responses = mutable.ArrayBuffer[RouteTestResult]()
-      val nLoop = 10
-      for (i <- 0 until nLoop) {
-        val response = Post(s"/v2/models/$name/versions/${deployResponse.version}/infer", input.copy(id=Some(s"$i"))) ~> route ~> runRoute
-        responses += response
-      }
-
-      for (i <- (0 until nLoop).reverse) {
-        check {
-          status shouldEqual StatusCodes.OK
-          val actual = responseAs[InferenceResponse]
-          val expected = output.copy(
-            model_name=name,
-            model_version=Some(deployResponse.version),
-            id=Some(s"$i"))
-          actual.id shouldEqual expected.id
-          actual.dataToSeq.outputs.head.data shouldEqual expected.dataToSeq.outputs.head.data
-        } (responses(i))
-      }
-
-      log.info(s"The elapsed time of $nLoop requests with batch disabled is: ${System.currentTimeMillis() - start}")
       undeployModel(name)
     }
 
