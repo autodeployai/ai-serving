@@ -1,0 +1,7 @@
+{
+  "max-batch-size": 8,
+  "max-batch-delay-ms": 10,
+  "request-timeout-ms": 20,
+  "warmup-count": 100,
+  "warmup-data-type": "random"
+}
