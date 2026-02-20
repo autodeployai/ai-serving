@@ -188,10 +188,10 @@ Refer to the following example for guidance:
     │   │   └── model.onnx
     │   └── 2
     │       └── model.onnx
-    ├── mobilenetv2
-    │   └── 1
-    │       └── model.onnx
-    └── model.conf
+    └── mobilenet
+        ├── 1
+        │   └── model.onnx
+        └── model.conf
 ```
 Undeploying a model is straightforward, simply remove the corresponding model directory or the specific version directory.
 
