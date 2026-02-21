@@ -16,8 +16,9 @@
 
 package com.autodeployai.serving
 
+import com.autodeployai.serving.model.DataType
 import com.autodeployai.serving.protobuf._
-import com.autodeployai.serving.utils.Utils
+import com.autodeployai.serving.utils.{DataUtils, Utils}
 import com.google.protobuf.ByteString
 import inference.InferParameter.ParameterChoice
 import inference.{InferTensorContents, ModelInferRequest, ModelInferResponse, ModelMetadataRequest, ModelMetadataResponse, ModelReadyRequest}
@@ -197,7 +198,7 @@ class OnnxGrpcV2BatchSpec extends BaseGrpcSpec {
         actual.modelName shouldEqual name
         actual.modelVersion shouldEqual version
 
-        actual.rawOutputContents.head shouldEqual rawExpected.rawOutputContents.head
+        DataUtils.convertToArray(actual.rawOutputContents.head.asReadOnlyByteBuffer().order(ByteOrder.nativeOrder), DataType.FP32).asInstanceOf[Array[Float]].toSeq shouldEqual DataUtils.convertToArray(rawExpected.rawOutputContents.head.asReadOnlyByteBuffer().order(ByteOrder.nativeOrder), DataType.FP32).asInstanceOf[Array[Float]].toSeq
       }
 
       log.info(s"The elapsed time of $nLoop requests with batch enabled is: ${System.currentTimeMillis() - start}")

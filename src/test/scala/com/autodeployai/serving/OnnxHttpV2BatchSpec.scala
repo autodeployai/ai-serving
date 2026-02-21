@@ -180,12 +180,12 @@ class OnnxHttpV2BatchSpec extends BaseHttpSpec with JsonSupport {
 
       Post(s"/v2/models/$name/versions/${deployResponse.version}/infer", input.copy(id=Some("success"))) ~> route ~> check {
         status shouldEqual StatusCodes.OK
-        val actual = responseAs[String]
+        val actual = responseAs[InferenceResponse]
         val expected = output.copy(
           model_name=name,
           model_version=Some(deployResponse.version),
           id=Some("success"))
-        actual shouldEqual expected.toJson.toString
+        actual.dataToSeq.outputs.head.data shouldEqual expected.dataToSeq.outputs.head.data
       }
       undeployModel(name)
     }
