@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2025 AutoDeployAI
+ * Copyright (c) 2019-2026 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,20 +17,25 @@
 package com.autodeployai.serving.http
 
 import com.autodeployai.serving.errors.ErrorHandler.{defaultExceptionHandler, defaultRejectionHandler}
-import com.autodeployai.serving.protobuf.{fromPb, toPb, PredictRequest => PbPredictRequest}
-import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpResponse, StatusCodes}
+import com.autodeployai.serving.grpc.{fromPb, toPb}
+import akka.http.scaladsl.model.{ContentType, ContentTypes, HttpEntity, HttpResponse, Multipart, StatusCodes}
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
 import akka.stream.scaladsl.FileIO
 import akka.util.ByteString
-import com.autodeployai.serving.deploy.ModelManager
-import com.autodeployai.serving.errors.UnknownContentTypeException
-import com.autodeployai.serving.model.{JsonSupport, PredictRequest}
+import com.autodeployai.serving.deploy.InferenceService
+import com.autodeployai.serving.errors.{BaseException, UnknownContentTypeException}
+import com.autodeployai.serving.model.{DeployConfig, JsonSupport, PredictRequest}
+import com.autodeployai.serving.protobuf
 import com.autodeployai.serving.utils.Utils
+import org.slf4j.Logger
+import spray.json._
 
 import scala.concurrent.{ExecutionContext, Future}
 
 trait Endpoints extends JsonSupport with HttpSupport {
+  def log: Logger
+
   def up(): Route = path("up") {
     complete(HttpResponse(
       status = StatusCodes.OK,
@@ -46,11 +51,11 @@ trait Endpoints extends JsonSupport with HttpSupport {
               requestEntityPresent {
                 withoutSizeLimit {
                   extractRequestEntity { entity =>
-                    val dest = Utils.tempPath()
+                    val dest = Utils.tempFilePath()
                     val uploadedFut = entity.dataBytes.runWith(FileIO.toPath(dest))
                     val validatedFut = uploadedFut.flatMap(_ => {
                       val modelType = Utils.inferModelType(dest, contentType = Some(entity.contentType))
-                      ModelManager.validate(dest, modelType)
+                      InferenceService.validate(dest, modelType)
                     }).transform { result =>
                       Utils.safeDelete(dest)
                       result
@@ -72,7 +77,7 @@ trait Endpoints extends JsonSupport with HttpSupport {
     logResponseTime {
       handleExceptions(defaultExceptionHandler) {
         get {
-          onSuccess(ModelManager.getMetadataAll()) { result =>
+          onSuccess(InferenceService.getMetadataAll()) { result =>
             complete(result)
           }
         }
@@ -89,17 +94,20 @@ trait Endpoints extends JsonSupport with HttpSupport {
               import ctx.materializer
               requestEntityPresent {
                 withoutSizeLimit {
+                  // Check if request is multipart/form-data
+                  entity(as[Multipart.FormData]) { formData =>
+                    handleMultipartDeploy(modelName, formData)
+                  } ~
                   extractRequestEntity { entity =>
-                    val dest = Utils.tempPath()
+                    val dest = Utils.tempFilePath()
                     val uploadedFut = entity.dataBytes.runWith(FileIO.toPath(dest))
                     val deployedFut = uploadedFut.flatMap(_ => {
                       val modelType = Utils.inferModelType(dest, contentType = Some(entity.contentType))
-                      ModelManager.deploy(dest, modelType, modelName)
+                      InferenceService.deploy(dest, modelType, modelName)
                     }).transform { result =>
                       Utils.safeDelete(dest)
                       result
                     }
-
                     onSuccess(deployedFut) { result =>
                       complete(StatusCodes.Created, result)
                     }
@@ -112,12 +120,12 @@ trait Endpoints extends JsonSupport with HttpSupport {
               predict(modelName)
             } ~
             get {
-              onSuccess(ModelManager.getMetadata(modelName)) { result =>
+              onSuccess(InferenceService.getMetadata(modelName)) { result =>
                 complete(result)
               }
             } ~
             delete {
-              onSuccess(ModelManager.undeploy(modelName)) { _ =>
+              onSuccess(InferenceService.undeploy(modelName)) { _ =>
                 complete(StatusCodes.NoContent)
               }
             }
@@ -132,7 +140,7 @@ trait Endpoints extends JsonSupport with HttpSupport {
         handleExceptions(defaultExceptionHandler) {
           handleRejections(defaultRejectionHandler) {
             get {
-              onSuccess(ModelManager.getMetadata(modelName, Some(modelVersion))) { result =>
+              onSuccess(InferenceService.getMetadata(modelName, Some(modelVersion))) { result =>
                 complete(result)
               }
             } ~ post {
@@ -149,22 +157,21 @@ trait Endpoints extends JsonSupport with HttpSupport {
       requestEntityPresent {
         Option(ctx.request.entity.contentType) match {
           case Some(value) => value.mediaType.value match {
-            case "application/json" => {
+            case "application/json" =>
               entity(as[PredictRequest]) { payload =>
-                val predictedFut = ModelManager.predict(payload, modelName, modelVersion, grpc = false)
+                val predictedFut = InferenceService.predict(payload, modelName, modelVersion)
 
                 onSuccess(predictedFut) { result =>
                   complete(result)
                 }
               }
-            }
             case "application/vnd.google.protobuf" | "application/x-protobuf" | "application/octet-stream"  =>
               extractDataBytes { data =>
                 val bytesFut: Future[ByteString] = data.runFold(ByteString.empty) { case (acc, b) => acc ++ b }
                 val predictedPbFut = bytesFut.flatMap { bytes =>
-                  val pbRequest = PbPredictRequest.parseFrom(bytes.toArray)
+                  val pbRequest = protobuf.PredictRequest.parseFrom(bytes.toArray)
                   val payload = fromPb(pbRequest)
-                  ModelManager.predict(payload, modelName, modelVersion, grpc = false).map(x => {
+                  InferenceService.predict(payload, modelName, modelVersion).map(x => {
                     toPb(x).copy(modelSpec = pbRequest.modelSpec).toByteArray
                   })
                 }
@@ -181,6 +188,70 @@ trait Endpoints extends JsonSupport with HttpSupport {
           }
           case _           => throw UnknownContentTypeException()
         }
+      }
+    }
+  }
+
+  private def handleMultipartDeploy(modelName: String, formData: Multipart.FormData)(implicit ec: ExecutionContext): Route = {
+    extractRequestContext { ctx =>
+      import ctx.materializer
+      import scala.collection.mutable
+
+      val modelFileRef = mutable.Map[String, java.nio.file.Path]()
+      val configRef = mutable.Map[String, DeployConfig]()
+      val contentTypeRef = mutable.Map[String, ContentType]()
+
+      val processParts: Future[Int] = formData.parts.mapAsync(1) { part =>
+        part.name match {
+          case name if name == "model" || name == "file" =>
+            // Save model file to temporary location
+            val dest = Utils.tempFilePath()
+            part.entity.dataBytes.runWith(FileIO.toPath(dest)).map { _ =>
+              log.info(s"A temporary model file $dest created")
+
+              modelFileRef.put("model", dest)
+              contentTypeRef.put("model", part.entity.contentType)
+              ()
+            }
+          case name if name == "config" || name == "configuration" =>
+            // Parse JSON configuration
+            part.entity.dataBytes.runFold(ByteString.empty)(_ ++ _).map { bytes =>
+              val jsonString = bytes.utf8String
+              try {
+                if (jsonString.nonEmpty && jsonString.trim.nonEmpty) {
+                  val config = jsonString.parseJson.convertTo[DeployConfig]
+                  configRef.put("config", config)
+                  log.debug(s"Parsed deployment configuration: $config")
+                }
+              } catch {
+                case ex: Exception =>
+                  log.warn(s"Failed to parse deployment configuration JSON: ${ex.getMessage}", ex)
+              }
+              ()
+            }
+          case _ =>
+            // Ignore unknown fields
+            part.entity.discardBytes()
+            Future.successful(())
+        }
+      }.runFold(0)((count, _) => count + 1)
+
+      val deployedFut = processParts.flatMap { _ =>
+        modelFileRef.get("model") match {
+          case Some(filePath) =>
+            val deployConfig = configRef.get("config")
+            val modelType = Utils.inferModelType(filePath, contentType = contentTypeRef.get("model"))
+            InferenceService.deploy(filePath, modelType, modelName, deployConfig)
+          case _ =>
+            throw new BaseException("Missing required field 'model' or 'file' in multipart form data")
+        }
+      } transform { result =>
+        modelFileRef.get("model").foreach(filePath => Utils.safeDelete(filePath))
+        result
+      }
+
+      onSuccess(deployedFut) { result =>
+        complete(StatusCodes.Created, result)
       }
     }
   }

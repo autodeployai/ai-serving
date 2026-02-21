@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024 AutoDeployAI
+ * Copyright (c) 2019-2026 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,9 @@
 
 package com.autodeployai.serving.model
 
+import com.autodeployai.serving.AIServer.DeployConfigJsonFormat
+import com.typesafe.config.{Config, ConfigFactory}
+
 /**
  * Response for deploying request on successful run
  *
@@ -23,3 +26,25 @@ package com.autodeployai.serving.model
  * @param version The deployed version starts from 1
  */
 case class DeployResponse(name: String, version: String)
+
+/**
+ * Deployment configurations
+ *
+ * @param requestTimeoutMs  The request timeout
+ * @param maxBatchSize      The max batch size
+ * @param maxBatchDelayMs   The max batch delay in milliseconds
+ * @param warmupCount       The specified warmup count
+ * @param warmupDataType    One of "zero", "random"
+ *                            - "zero": using all zero data
+ *                            - "random": using random data
+ */
+case class DeployConfig(requestTimeoutMs: Option[Long]=None,
+                        maxBatchSize: Option[Int]=None,
+                        maxBatchDelayMs: Option[Long]=None,
+                        warmupCount: Option[Int]=None,
+                        warmupDataType: Option[String]=None) {
+
+  def toConfig: Config = {
+    ConfigFactory.parseString(DeployConfigJsonFormat.write(this).toString())
+  }
+}

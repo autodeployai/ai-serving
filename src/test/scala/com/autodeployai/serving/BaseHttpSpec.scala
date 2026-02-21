@@ -17,13 +17,15 @@
 package com.autodeployai.serving
 
 import java.nio.file.Paths
-import akka.http.scaladsl.model.{ContentType, HttpEntity, StatusCodes}
+import akka.http.scaladsl.model.{ContentType, ContentTypes, HttpEntity, Multipart, StatusCodes}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
-import com.autodeployai.serving.deploy.ModelManager
+import akka.stream.scaladsl.Source
+import com.autodeployai.serving.deploy.InferenceService
 import com.autodeployai.serving.errors.ErrorJsonSupport
-import com.autodeployai.serving.model.DeployResponse
+import com.autodeployai.serving.model.{DeployConfig, DeployResponse}
 import com.autodeployai.serving.utils.Utils
 import org.scalatest.Outcome
+import spray.json._
 
 abstract class BaseHttpSpec extends BaseSpec
   with ScalatestRouteTest
@@ -36,7 +38,7 @@ abstract class BaseHttpSpec extends BaseSpec
       test()
     } finally {
       // Shared cleanup (run at end of each test)
-      Utils.deleteDirectory(Paths.get(ModelManager.HOME_PATH))
+      Utils.deleteDirectory(Paths.get(InferenceService.homePath))
     }
   }
 
@@ -45,6 +47,29 @@ abstract class BaseHttpSpec extends BaseSpec
     val path = getResource(filename)
 
     Put(s"/v1/models/${name}", HttpEntity.fromPath(contentType, path)) ~> route ~> check {
+      status shouldEqual StatusCodes.Created
+      result = responseAs[DeployResponse]
+    }
+    result
+  }
+
+  def deployModelWithConfig(name: String, filename: String, contentType: ContentType, deployConfig: DeployConfig): DeployResponse = {
+    var result: DeployResponse = null
+    val path = getResource(filename)
+
+    val filePart = Multipart.FormData.BodyPart.fromPath(
+      "model",
+      contentType,
+      path
+    )
+
+    val configPart = Multipart.FormData.BodyPart.Strict(
+      "config",
+      HttpEntity(ContentTypes.`application/json`, deployConfig.toJson.toString())
+    )
+
+    val formData = Multipart.FormData(Source(List(filePart, configPart)))
+    Put(s"/v1/models/${name}", formData) ~> route ~> check {
       status shouldEqual StatusCodes.Created
       result = responseAs[DeployResponse]
     }

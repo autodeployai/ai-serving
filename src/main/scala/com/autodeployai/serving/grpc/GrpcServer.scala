@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024 AutoDeployAI
+ * Copyright (c) 2019-2026 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-package com.autodeployai.serving.protobuf
+package com.autodeployai.serving.grpc
 
+import com.autodeployai.serving.protobuf
 import inference.GRPCInferenceServiceGrpc
 import io.grpc.{Server, ServerBuilder}
 import org.slf4j.{Logger, LoggerFactory}
@@ -32,7 +33,7 @@ class GrpcServer(executionContext: ExecutionContext, port: Int) {
   def start(): Unit = {
     server = ServerBuilder.
       forPort(port).
-      addService(DeploymentServiceGrpc.bindService(new DeploymentServiceImpl, executionContext)).
+      addService(protobuf.DeploymentServiceGrpc.bindService(new DeploymentServiceImpl, executionContext)).
       addService(GRPCInferenceServiceGrpc.bindService(new DeploymentServiceImplV2, executionContext)).
       build.
       start

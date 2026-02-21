@@ -17,6 +17,7 @@
 package com.autodeployai.serving
 
 import com.autodeployai.serving.model.{DataType, InferenceRequest, InferenceResponse}
+import com.autodeployai.serving.grpc._
 import com.autodeployai.serving.protobuf._
 import com.autodeployai.serving.utils.DataUtils
 import com.google.protobuf.ByteString

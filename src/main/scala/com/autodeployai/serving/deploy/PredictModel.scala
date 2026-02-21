@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2025 AutoDeployAI
+ * Copyright (c) 2019-2026 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,28 +20,55 @@ import java.nio.file.Path
 import com.autodeployai.serving.utils.Utils.toOption
 import com.autodeployai.serving.errors.ModelTypeNotSupportedException
 import com.autodeployai.serving.model.{Field, InferenceRequest, InferenceResponse, ModelInfo, PredictRequest, PredictResponse}
+import com.autodeployai.serving.utils.{Constants, Utils}
+import com.typesafe.config.Config
+
+import scala.concurrent.ExecutionContext
+
+/**
+ * Used to control termination of a call of predicting
+ */
+trait RunOptions extends AutoCloseable {
+  def terminate(): Unit
+
+  def getUnderlineObject[T]: T
+}
 
 /**
  * Predictable model supporting `predict`
  */
 trait Predictable {
+
   /**
-   *  Predicting API v1
-   * @param request
+   *  Create an object of prediction options
    * @return
    */
-  def predict(request: PredictRequest, grpc: Boolean): PredictResponse
+  def newRunOptions(): RunOptions
+
+  /**
+   *  Predicting API v1
+   *
+   * @param request The input payload to predict
+   * @param options The PredictOptions to control this run
+   * @return The inferred outputs
+   */
+  def predict(request: PredictRequest, options: RunOptions): PredictResponse
 
   /**
    * Predicting API v2
-   * @param request
-   * @return
+   *
+   * @param request The input payload to predict
+   * @param options The PredictOptions to control this run
+   * @return The inferred outputs
    */
-  def predict(request: InferenceRequest, grpc: Boolean): InferenceResponse
+  def predict(request: InferenceRequest, options: RunOptions): InferenceResponse
 }
 
 trait ModelLoader {
-  def load(path: Path): PredictModel
+  def load(path: Path,
+           modelName: String,
+           modelVersion: String,
+           config: Option[Config])(implicit ec: ExecutionContext): PredictModel
 }
 
 trait PredictModel extends Predictable with AutoCloseable {
@@ -90,14 +117,58 @@ trait PredictModel extends Predictable with AutoCloseable {
     appVersion = appVersion(),
     copyright = copyright()
   )
+
+  def config(): Option[Config] = None
+
+  def batchProcessorV2(): Option[BatchProcessor[InferenceRequest, InferenceResponse]] = None
+
+  def modelName: String = ""
+
+  def modelVersion: String = ""
+
+  def createBatchProcessorV2(model: PredictModel, config: Option[Config])(implicit ec: ExecutionContext): Option[BatchProcessor[InferenceRequest, InferenceResponse]] = config match{
+    case Some(conf) if model.isSupportBatch =>
+      val maxBatchSize = if (conf.hasPath(Constants.CONFIG_MAX_BATCH_SIZE)) {
+        conf.getInt(Constants.CONFIG_MAX_BATCH_SIZE)
+      } else 0
+      val maxBatchDelayMs = if (conf.hasPath(Constants.CONFIG_MAX_BATCH_DELAY_MS)) {
+        conf.getLong(Constants.CONFIG_MAX_BATCH_DELAY_MS)
+      } else 0
+
+      if (maxBatchSize > 1 && maxBatchDelayMs > 0L) {
+        Some(new BatchProcessorV2(model, maxBatchSize, maxBatchDelayMs))
+      } else None
+    case _ => None
+  }
+
+  def warmup(): Unit = ()
+
+  def warmupConfig(): (Int, String) = config() match {
+    case Some(conf) =>
+      val warmupCount = if (conf.hasPath(Constants.CONFIG_WARMUP_COUNT)) conf.getInt(Constants.CONFIG_WARMUP_COUNT) else 0
+      val warmupDataType = if (conf.hasPath(Constants.CONFIG_WARMUP_DATA_TYPE)) conf.getString(Constants.CONFIG_WARMUP_DATA_TYPE) else Constants.CONFIG_WARMUP_DATA_TYPE_RANDOM
+      (warmupCount, warmupDataType)
+    case _ => (0, "")
+  }
+
+  private def isSupportBatch: Boolean = {
+    Utils.supportDynamicBatch(inputs().map(_.shape))
+  }
 }
 
 object PredictModel {
 
-  def load(path: Path, modelType: String): PredictModel = modelType match {
-    case "PMML" => PmmlModel.load(path)
-    case "ONNX" => OnnxModel.load(path)
-    case _      => throw ModelTypeNotSupportedException(toOption(modelType))
+  def load(path: Path,
+           modelType: String,
+           modelName: String="",
+           modelVersion: String="",
+           config: Option[Config]=None)(implicit ec: ExecutionContext): PredictModel = modelType match {
+    case Constants.MODEL_TYPE_PMML =>
+      PmmlModel.load(path, modelName, modelVersion, config)
+    case Constants.MODEL_TYPE_ONNX =>
+      OnnxModel.load(path, modelName, modelVersion, config)
+    case _      =>
+      throw ModelTypeNotSupportedException(toOption(modelType))
   }
 }
 

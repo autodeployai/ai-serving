@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2025 AutoDeployAI
+ * Copyright (c) 2019-2026 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,24 +29,24 @@ import java.nio.charset.StandardCharsets
 import scala.collection.immutable.ArraySeq
 import scala.jdk.CollectionConverters._
 
-package object protobuf {
+package object grpc {
   implicit class ModelInfoImplicitClass(m: model.ModelInfo) {
-    def toPb: ModelInfo = protobuf.toPb(m)
+    def toPb: protobuf.ModelInfo = grpc.toPb(m)
   }
 
   implicit class DeployResponseImplicitClass(r: model.DeployResponse) {
-    def toPb: DeployResponse = protobuf.toPb(r)
+    def toPb: protobuf.DeployResponse = grpc.toPb(r)
   }
 
   implicit class ModelMetadataImplicitClass(m: model.ModelMetadata) {
-    def toPb: ModelMetadata = protobuf.toPb(m)
+    def toPb: protobuf.ModelMetadata = grpc.toPb(m)
   }
 
   implicit class PredictResponseImplicitClass(r: model.PredictResponse) {
-    def toPb: PredictResponse = protobuf.toPb(r)
+    def toPb: protobuf.PredictResponse = grpc.toPb(r)
   }
 
-  def toPb(m: model.ModelInfo): ModelInfo = ModelInfo(
+  def toPb(m: model.ModelInfo): protobuf.ModelInfo = protobuf.ModelInfo(
     `type` = m.`type`,
     serialization = m.serialization,
     runtime = m.runtime,
@@ -68,7 +68,7 @@ package object protobuf {
     source = off(m.source)
   )
 
-  def toPb(f: model.Field): Field = Field(
+  def toPb(f: model.Field): protobuf.Field = protobuf.Field(
     name = f.name,
     `type` = f.`type`,
     optype = off(f.optype),
@@ -76,16 +76,16 @@ package object protobuf {
     values = off(f.values)
   )
 
-  def toPb(seq: Option[Seq[model.Field]]): Seq[Field] =
+  def toPb(seq: Option[Seq[model.Field]]): Seq[protobuf.Field] =
     seq.map(fields => fields.map(f => toPb(f))).getOrElse(Nil)
 
   def off(o: Option[String]): String = o.getOrElse("")
 
-  def toPb(r: model.DeployResponse): DeployResponse = DeployResponse(
-    Some(ModelSpec(r.name, r.version))
+  def toPb(r: model.DeployResponse): protobuf.DeployResponse = protobuf.DeployResponse(
+    Some(protobuf.ModelSpec(r.name, r.version))
   )
 
-  def toPb(m: model.ModelMetadata): ModelMetadata = ModelMetadata(
+  def toPb(m: model.ModelMetadata): protobuf.ModelMetadata = protobuf.ModelMetadata(
     id = m.id,
     name = m.name,
     createdAt = Some(Timestamp(m.createdAt.getTime)),
@@ -94,13 +94,13 @@ package object protobuf {
     versions = m.versions.map(versions => versions.map(toPb)).getOrElse(Nil)
   )
 
-  def toPb(r: model.RecordSpec): RecordSpec = RecordSpec(
-    records = r.records.map(x => x.map(y => Record(y.map[String, Value](x => x._1 -> anyToValue(x._2))))).getOrElse(Nil),
+  def toPb(r: model.RecordSpec): protobuf.RecordSpec = protobuf.RecordSpec(
+    records = r.records.map(x => x.map(y => protobuf.Record(y.map[String, protobuf.Value](x => x._1 -> anyToValue(x._2))))).getOrElse(Nil),
     columns = r.columns.getOrElse(Nil),
-    data = r.data.map(x => x.map(y => ListValue(y.map(anyToValue)))).getOrElse(Nil)
+    data = r.data.map(x => x.map(y => protobuf.ListValue(y.map(anyToValue)))).getOrElse(Nil)
   )
 
-  def toPb(r: model.PredictResponse): PredictResponse = PredictResponse(
+  def toPb(r: model.PredictResponse): protobuf.PredictResponse = protobuf.PredictResponse(
     result = Some(toPb(r.result))
   )
 
@@ -127,8 +127,11 @@ package object protobuf {
   def toPb(r: model.InferenceResponse): ModelInferResponse =  {
     val (outputs, rawOutputContents: Seq[ByteString]) = if (isRawOutput(r)) {
       val contents: Seq[ByteString]  = r.outputs.map(x => x.data match {
-        case a: Array[Byte]   => ByteString.copyFrom(a);
-        case a: Array[String] => DataUtils.writeBinaryString(a)
+        case buffer: ByteBuffer =>
+          buffer.rewind()
+          ByteString.copyFrom(buffer)
+        case a: Array[Byte]     => ByteString.copyFrom(a);
+        case a: Array[String]   => DataUtils.writeBinaryString(a)
         case b => throw new BaseException(s"Unexpected output value: $b")
       })
       (r.outputs.map(x => toPb(x, output_raw = true)), contents)
@@ -146,7 +149,7 @@ package object protobuf {
     )
   }
 
-  def isRawOutput(r: model.InferenceResponse): Boolean = {
+  private def isRawOutput(r: model.InferenceResponse): Boolean = {
     val rawOutput = r.parameters.flatMap(x => x.get("raw_output")).getOrElse(false).asInstanceOf[Boolean]
     if (!rawOutput) r.outputs.exists(x => x.datatype == "FP16" || x.datatype =="BF16" ) else true
   }
@@ -161,7 +164,7 @@ package object protobuf {
     )
   }
 
-  def any2Tensor(r: Any, datatype: String): inference.InferTensorContents = datatype match {
+  private def any2Tensor(r: Any, datatype: String): inference.InferTensorContents = datatype match {
     case "BOOL" =>
       r match {
         case a: Array[Byte] =>
@@ -208,7 +211,7 @@ package object protobuf {
           inference.InferTensorContents(bytesContents=ArraySeq.unsafeWrapArray(a.map(x => ByteString.copyFrom(x, StandardCharsets.UTF_8))))
       }
     case "FP16" | "BF16"  =>
-      throw new BaseException(s"The ${datatype} data type must be represented as raw content as there is no specific data type for a 16-bit float type.")
+      throw new BaseException(s"The $datatype data type must be represented as raw content as there is no specific data type for a 16-bit float type.")
   }
 
   def toPb(parameters: Option[Map[String, Any]]): Map[String, inference.InferParameter] = {
@@ -224,66 +227,76 @@ package object protobuf {
     }).getOrElse(Map.empty)
   }
 
-  private def anyToValue(v: Any): Value = v match {
-    case s: String              => Value(Kind.StringValue(s))
-    case i: Int                 => Value(Kind.NumberValue(i))
-    case i: java.lang.Integer   => Value(Kind.NumberValue(i.doubleValue()))
-    case l: Long                => Value(Kind.NumberValue(l.doubleValue()))
-    case l: java.lang.Long      => Value(Kind.NumberValue(l.doubleValue()))
-    case f: Float               => Value(Kind.NumberValue(f))
-    case f: java.lang.Float     => Value(Kind.NumberValue(f.doubleValue()))
-    case d: Double              => Value(Kind.NumberValue(d))
-    case d: java.lang.Double    => Value(Kind.NumberValue(d))
-    case s: Short               => Value(Kind.NumberValue(s))
-    case s: java.lang.Short     => Value(Kind.NumberValue(s.doubleValue()))
-    case b: Byte                => Value(Kind.NumberValue(b))
-    case b: java.lang.Byte      => Value(Kind.NumberValue(b.doubleValue()))
-    case n: java.lang.Number    => Value(Kind.NumberValue(n.doubleValue()))
-    case true                   => Value(Kind.BoolValue(true))
-    case false                  => Value(Kind.BoolValue(false))
-    case s: Seq[_]              => Value(Kind.ListValue(ListValue(s.map(anyToValue))))
-    case l: java.util.List[_]   => Value(Kind.ListValue(ListValue(l.asScala.toSeq.map(anyToValue))))
-    case m: Map[_, _]           => Value(Kind.RecordValue(Record(m.map(x => x._1.toString -> anyToValue(x._2)))))
-    case m: java.util.Map[_, _] => Value(Kind.RecordValue(Record(m.asScala.toMap.map(x => x._1.toString -> anyToValue(x._2)))))
+  private def anyToValue(v: Any): protobuf.Value = v match {
+    case s: String              => protobuf.Value(Kind.StringValue(s))
+    case i: Int                 => protobuf.Value(Kind.NumberValue(i))
+    case i: java.lang.Integer   => protobuf.Value(Kind.NumberValue(i.doubleValue()))
+    case l: Long                => protobuf.Value(Kind.NumberValue(l.doubleValue()))
+    case l: java.lang.Long      => protobuf.Value(Kind.NumberValue(l.doubleValue()))
+    case f: Float               => protobuf.Value(Kind.NumberValue(f))
+    case f: java.lang.Float     => protobuf.Value(Kind.NumberValue(f.doubleValue()))
+    case d: Double              => protobuf.Value(Kind.NumberValue(d))
+    case d: java.lang.Double    => protobuf.Value(Kind.NumberValue(d))
+    case s: Short               => protobuf.Value(Kind.NumberValue(s))
+    case s: java.lang.Short     => protobuf.Value(Kind.NumberValue(s.doubleValue()))
+    case b: Byte                => protobuf.Value(Kind.NumberValue(b))
+    case b: java.lang.Byte      => protobuf.Value(Kind.NumberValue(b.doubleValue()))
+    case n: java.lang.Number    => protobuf.Value(Kind.NumberValue(n.doubleValue()))
+    case true                   => protobuf.Value(Kind.BoolValue(true))
+    case false                  => protobuf.Value(Kind.BoolValue(false))
+    case s: Seq[_]              => protobuf.Value(Kind.ListValue(protobuf.ListValue(s.map(anyToValue))))
+    case l: java.util.List[_]   => protobuf.Value(Kind.ListValue(protobuf.ListValue(l.asScala.toSeq.map(anyToValue))))
+    case m: Map[_, _]           => protobuf.Value(Kind.RecordValue(protobuf.Record(m.map(x => x._1.toString -> anyToValue(x._2)))))
+    case m: java.util.Map[_, _] => protobuf.Value(Kind.RecordValue(protobuf.Record(m.asScala.toMap.map(x => x._1.toString -> anyToValue(x._2)))))
     // Takes float as default data type
-    case b: ByteBuffer => Value(Kind.TensorValue(TensorProto(dataType = FLOAT.index, rawData = ByteString.copyFrom(b))))
+    case b: ByteBuffer => protobuf.Value(Kind.TensorValue(protobuf.TensorProto(dataType = FLOAT.index, rawData = ByteString.copyFrom(b))))
     case a: Array[_]   => arrayToValue(a) // Value(Kind.ListValue(ListValue(a.map(anyToValue))))
-    case _             => Value(Kind.NullValue(NullValue.NULL_VALUE))
+    case _             => protobuf.Value(Kind.NullValue(protobuf.NullValue.NULL_VALUE))
   }
 
-  def arrayToValue(arr: Array[_]): Value = {
+  def arrayToValue(arr: Array[_]): protobuf.Value = {
     val dims = Utils.shapeOfValue(arr).toSeq
     val flattenArr = Utils.flatten(arr)
     flattenArr match {
-      case a: Array[Float]  => Value(Kind.TensorValue(TensorProto(dims = dims, dataType = FLOAT.index,
+      case a: Array[Float]  => protobuf.Value(Kind.TensorValue(protobuf.TensorProto(dims = dims, dataType = FLOAT.index,
         floatData = a.toSeq)))
-      case a: Array[Double] => Value(Kind.TensorValue(TensorProto(dims = dims, dataType = DOUBLE.index,
+      case a: Array[Double] => protobuf.Value(Kind.TensorValue(protobuf.TensorProto(dims = dims, dataType = DOUBLE.index,
         doubleData = a.toSeq)))
       // Takes float as default data type
-      case a: Array[Byte]    => Value(Kind.TensorValue(TensorProto(dims = dims, dataType = FLOAT.index,
+      case a: Array[Byte]    => protobuf.Value(Kind.TensorValue(protobuf.TensorProto(dims = dims, dataType = FLOAT.index,
         rawData = ByteString.copyFrom(a))))
-      case a: Array[Short]   => Value(Kind.TensorValue(TensorProto(dims = dims, dataType = INT16.index,
+      case a: Array[Short]   => protobuf.Value(Kind.TensorValue(protobuf.TensorProto(dims = dims, dataType = INT16.index,
         int32Data = a.toSeq.map(x => x.toInt))))
-      case a: Array[Int]     => Value(Kind.TensorValue(TensorProto(dims = dims, dataType = INT32.index,
+      case a: Array[Int]     => protobuf.Value(Kind.TensorValue(protobuf.TensorProto(dims = dims, dataType = INT32.index,
         int32Data = a.toSeq)))
-      case a: Array[Long]    => Value(Kind.TensorValue(TensorProto(dims = dims, dataType = INT64.index,
+      case a: Array[Long]    => protobuf.Value(Kind.TensorValue(protobuf.TensorProto(dims = dims, dataType = INT64.index,
         int64Data = a.toSeq)))
-      case a: Array[Boolean] => Value(Kind.TensorValue(TensorProto(dims = dims, dataType = BOOL.index,
+      case a: Array[Boolean] => protobuf.Value(Kind.TensorValue(protobuf.TensorProto(dims = dims, dataType = BOOL.index,
         int32Data = a.toSeq.map(x => if (x) 1 else 0))))
-      case a: Array[String]  => Value(Kind.TensorValue(TensorProto(dims = dims, dataType = STRING.index,
+      case a: Array[String]  => protobuf.Value(Kind.TensorValue(protobuf.TensorProto(dims = dims, dataType = STRING.index,
         stringData = a.toSeq.map(x => ByteString.copyFromUtf8(x)))))
-      case _                 => Value(Kind.ListValue(ListValue(arr.toSeq.map(anyToValue))))
+      case _                 => protobuf.Value(Kind.ListValue(protobuf.ListValue(arr.toSeq.map(anyToValue))))
     }
   }
 
 
-  def fromPb(p: PredictRequest): model.PredictRequest = {
+  def fromPb(p: protobuf.PredictRequest): model.PredictRequest = {
     require(p.x.isDefined, "X is missing in the predict request")
 
     model.PredictRequest(fromPb(p.x.get), Option(p.filter))
   }
 
-  def fromPb(r: RecordSpec): model.RecordSpec = {
+  def fromPb(c: protobuf.DeployConfig): model.DeployConfig = {
+    model.DeployConfig(
+      requestTimeoutMs = if (c.requestTimeoutMs > 0L) Some(c.requestTimeoutMs) else None,
+      maxBatchSize = if (c.maxBatchSize > 0) Some(c.maxBatchSize) else None,
+      maxBatchDelayMs = if (c.maxBatchDelayMs > 0L) Some(c.maxBatchDelayMs) else None,
+      warmupCount = if (c.warmupCount > 0) Some(c.warmupCount) else None,
+      warmupDataType = if (c.warmupDataType.nonEmpty) Some(c.warmupDataType) else None
+    )
+  }
+
+  def fromPb(r: protobuf.RecordSpec): model.RecordSpec = {
     require(r.records.nonEmpty || (r.columns.nonEmpty && r.data.nonEmpty),
       "either records is present or both columns and data are present together.")
 
@@ -294,8 +307,8 @@ package object protobuf {
     }
   }
 
-  def fromPb(v: Value): Any = {
-    import Value.Kind._
+  def fromPb(v: protobuf.Value): Any = {
+    import protobuf.Value.Kind._
     v.kind match {
       case NumberValue(value) => value
       case StringValue(value) => value
@@ -307,7 +320,7 @@ package object protobuf {
     }
   }
 
-  def fromPb(v: TensorProto): Any = {
+  def fromPb(v: protobuf.TensorProto): Any = {
     require(v.dataType != UNDEFINED.index, "The element type in the input tensor is not defined.")
 
     if (!v.rawData.isEmpty) {
@@ -412,7 +425,7 @@ package object protobuf {
           ByteString.copyFrom(content.bytesContents.asJava).asReadOnlyByteBuffer().order(ByteOrder.nativeOrder)
         }
       case _ =>
-        throw new BaseException(s"The ${datatype} data type must be represented as raw content as there is no specific data type for a 16-bit float type.")
+        throw new BaseException(s"The $datatype data type must be represented as raw content as there is no specific data type for a 16-bit float type.")
     }
   }
 }

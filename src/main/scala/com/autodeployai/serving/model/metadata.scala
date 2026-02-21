@@ -90,10 +90,7 @@ case class ModelInfo(`type`: String,
                      app: Option[String] = None,
                      appVersion: Option[String] = None,
                      copyright: Option[String] = None,
-                     source: Option[String] = None) {
-
-  def strVersion: Option[String] = version.map(_.version)
-}
+                     source: Option[String] = None)
 
 /**
  * Model metadata with versions.
@@ -188,7 +185,6 @@ case class ModelMetadataV2(name: String,
                            inputs: Seq[MetadataTensor],
                            outputs: Seq[MetadataTensor])
 
-
 /**
  * Server Metadata
  *
@@ -199,3 +195,22 @@ case class ModelMetadataV2(name: String,
 case class ServerMetadataResponse(name: String,
                                   version: String,
                                   extensions: Seq[String] = Seq.empty)
+
+
+/**
+ *
+ * @param live
+ */
+case class ServerLiveResponse(live: Boolean)
+
+/**
+ *
+ * @param ready
+ */
+case class ServerReadyResponse(ready: Boolean)
+
+/**
+ *
+ * @param ready
+ */
+case class ModelReadyResponse(ready: Boolean)

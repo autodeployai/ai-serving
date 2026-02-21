@@ -25,12 +25,15 @@ import com.autodeployai.serving.model.JsonSupport
 import com.autodeployai.serving.protobuf.TensorProto
 import org.scalactic.{Equality, TolerantNumerics}
 import org.scalatest.{Matchers, WordSpec}
+import org.slf4j.{Logger, LoggerFactory}
 
 import scala.concurrent.duration._
 
 abstract class BaseSpec extends WordSpec
   with Matchers
   with JsonSupport {
+
+  val log: Logger = LoggerFactory.getLogger(this.getClass)
 
   // Increase time out only for debugging
   implicit def default(implicit system: ActorSystem): RouteTestTimeout = RouteTestTimeout(30.minutes dilated)
@@ -76,7 +79,7 @@ abstract class BaseSpec extends WordSpec
     new Equality[Seq[T]] {
       def areEqual(a: Seq[T], b: Any): Boolean = {
         b match {
-          case bFloat: Seq[T] =>
+          case bFloat: Seq[_] =>
             if (a.size == bFloat.size) {
               a.zip(bFloat).forall(x => x._1 match {
                 case d: Double => doubleEquality.areEqual(d, x._2)
@@ -101,7 +104,7 @@ abstract class BaseSpec extends WordSpec
   implicit val anySeqEquality: Equality[Seq[Any]] = seqEquality[Any]
 
   def getResource(name: String): Path = {
-    Paths.get(s"./src/test/resources/${name}")
+    Paths.get(s"./src/test/resources/$name")
   }
 
   def getFloatTensor(name: String): Seq[Float] = {

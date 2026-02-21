@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024 AutoDeployAI
+ * Copyright (c) 2019-2026 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ object ErrorHandler extends ErrorJsonSupport {
       val code = bex match {
         case _: ModelNotFoundException          => NotFound
         case _: OnnxRuntimeLibraryNotFoundError => InternalServerError
+        case _: InferTimeoutException           => GatewayTimeout
         case _                                  => BadRequest
       }
       val error = bex.message
@@ -79,6 +80,7 @@ object ErrorHandler extends ErrorJsonSupport {
       val status = bex match {
         case _: ModelNotFoundException          => Status.NOT_FOUND
         case _: OnnxRuntimeLibraryNotFoundError => Status.INTERNAL
+        case _: InferTimeoutException           => Status.DEADLINE_EXCEEDED
         case _                                  => Status.INVALID_ARGUMENT
       }
 
