@@ -18,7 +18,7 @@ package com.autodeployai.serving.deploy
 
 import java.nio.file.Path
 import com.autodeployai.serving.utils.Utils.toOption
-import com.autodeployai.serving.errors.ModelTypeNotSupportedException
+import com.autodeployai.serving.errors.{InferTimeoutException, ModelTypeNotSupportedException}
 import com.autodeployai.serving.model.{Field, InferenceRequest, InferenceResponse, ModelInfo, PredictRequest, PredictResponse}
 import com.autodeployai.serving.utils.{Constants, Utils}
 import com.typesafe.config.Config
@@ -31,7 +31,26 @@ import scala.concurrent.ExecutionContext
 trait RunOptions extends AutoCloseable {
   def terminate(): Unit
 
+  def isCancelled: Boolean
+
   def getUnderlineObject[T]: T
+}
+
+class CancelOptions extends RunOptions {
+  @volatile private var cancelled: Boolean = false
+
+  override def terminate(): Unit = {
+    cancelled = true
+  }
+
+  override def getUnderlineObject[T]: T =
+    throw new NotImplementedError
+
+  override def close(): Unit = ()
+
+  override def isCancelled: Boolean = {
+    cancelled
+  }
 }
 
 /**
@@ -43,7 +62,7 @@ trait Predictable {
    *  Create an object of prediction options
    * @return
    */
-  def newRunOptions(): RunOptions
+  def newRunOptions(): Option[RunOptions]
 
   /**
    *  Predicting API v1
@@ -52,7 +71,7 @@ trait Predictable {
    * @param options The PredictOptions to control this run
    * @return The inferred outputs
    */
-  def predict(request: PredictRequest, options: RunOptions): PredictResponse
+  def predict(request: PredictRequest, options: Option[RunOptions]): PredictResponse
 
   /**
    * Predicting API v2
@@ -61,7 +80,7 @@ trait Predictable {
    * @param options The PredictOptions to control this run
    * @return The inferred outputs
    */
-  def predict(request: InferenceRequest, options: RunOptions): InferenceResponse
+  def predict(request: InferenceRequest, options: Option[RunOptions]): InferenceResponse
 }
 
 trait ModelLoader {
@@ -118,7 +137,7 @@ trait PredictModel extends Predictable with AutoCloseable {
     copyright = copyright()
   )
 
-  def config(): Option[Config] = None
+  def config: Option[Config] = None
 
   def batchProcessorV2(): Option[BatchProcessor[InferenceRequest, InferenceResponse]] = None
 
@@ -143,12 +162,28 @@ trait PredictModel extends Predictable with AutoCloseable {
 
   def warmup(): Unit = ()
 
-  def warmupConfig(): (Int, String) = config() match {
+  def parseWarmup(): (Int, String) = config match {
     case Some(conf) =>
       val warmupCount = if (conf.hasPath(Constants.CONFIG_WARMUP_COUNT)) conf.getInt(Constants.CONFIG_WARMUP_COUNT) else 0
       val warmupDataType = if (conf.hasPath(Constants.CONFIG_WARMUP_DATA_TYPE)) conf.getString(Constants.CONFIG_WARMUP_DATA_TYPE) else Constants.CONFIG_WARMUP_DATA_TYPE_RANDOM
       (warmupCount, warmupDataType)
     case _ => (0, "")
+  }
+
+  def timeout: Long = 0L
+
+  def parseTimeout(): Long = config match {
+    case Some(conf) =>
+      if (conf.hasPath(Constants.CONFIG_REQUEST_TIMEOUT_MS)) conf.getLong(Constants.CONFIG_REQUEST_TIMEOUT_MS) else 0L
+    case _ => 0L
+  }
+
+  protected def checkCancelled(runOptions: Option[RunOptions]): Unit = {
+    runOptions.foreach(x => {
+      if (x.isCancelled) {
+        throw InferTimeoutException(modelName, Option(modelVersion), timeout)
+      }
+    })
   }
 
   private def isSupportBatch: Boolean = {

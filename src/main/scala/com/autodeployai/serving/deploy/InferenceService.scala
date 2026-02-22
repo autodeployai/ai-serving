@@ -204,7 +204,7 @@ object InferenceService extends JsonSupport {
       model.predict(request, runOptions)
     }
 
-    withTimeout(futureResult, modelName, modelVersion, runOptions)
+    withTimeout(futureResult, model, runOptions)
   }
 
   /**
@@ -229,7 +229,7 @@ object InferenceService extends JsonSupport {
         }
     }
 
-    withTimeout(futureResult, modelName, modelVersion, runOptions)
+    withTimeout(futureResult, model, runOptions)
   }
 
   /**
@@ -590,28 +590,26 @@ object InferenceService extends JsonSupport {
    * @tparam T
    * @return
    */
-  private def withTimeout[T](future: Future[T], modelName: String, modelVersion: Option[String], runOptions: RunOptions)(implicit ec: ExecutionContext): Future[T] = {
-    val repository = repositories.get(modelName)
-    repository.flatMap(_.getTimeoutDuration(modelVersion)) match {
-      case Some(timeout) =>
-        val promise = Promise[T]()
-        val task = new TimerTask {
-          override def run(): Unit = {
-            if (!promise.isCompleted) {
-              runOptions.terminate()
-              promise.tryFailure(InferTimeoutException(modelName, modelVersion, timeout.toMillis))
-            }
+  private def withTimeout[T](future: Future[T], model: PredictModel, runOptions: Option[RunOptions])(implicit ec: ExecutionContext): Future[T] = {
+    val timeout = model.timeout
+    if (timeout > 0) {
+      val promise = Promise[T]()
+      val task = new TimerTask {
+        override def run(): Unit = {
+          if (!promise.isCompleted) {
+            runOptions.foreach(_.terminate())
+            promise.tryFailure(InferTimeoutException(model.modelName, Option(model.modelVersion), timeout))
           }
         }
-        val timer = new Timer(true)
-        timer.schedule(task, timeout.toMillis)
-        future.onComplete { result =>
-          timer.cancel()
-          promise.tryComplete(result)
-        }
-        promise.future
-      case _ => future
-    }
+      }
+      val timer = new Timer(true)
+      timer.schedule(task, timeout)
+      future.onComplete { result =>
+        timer.cancel()
+        promise.tryComplete(result)
+      }
+      promise.future
+    } else future
   }
 
 }

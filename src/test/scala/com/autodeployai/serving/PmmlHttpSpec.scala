@@ -19,7 +19,7 @@ package com.autodeployai.serving
 import akka.http.scaladsl.model.ContentTypes._
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.{HttpEntity, StatusCodes}
-import com.autodeployai.serving.model.{DeployConfig, ModelInfo, ModelMetadata, PredictResponse, RecordSpec}
+import com.autodeployai.serving.model.{DeployConfig, InferenceRequest, ModelInfo, ModelMetadata, PredictResponse, RecordSpec, RequestInput}
 
 class PmmlHttpSpec extends BaseHttpSpec {
 
@@ -142,6 +142,29 @@ class PmmlHttpSpec extends BaseHttpSpec {
       val name = "a-pmml-model"
       val deployConfig = DeployConfig(warmupCount=Some(100), warmupDataType=Some("random"))
       deployModelWithConfig(name, "single_iris_dectree.xml", `text/xml(UTF-8)`, deployConfig)
+      undeployModel(name)
+    }
+
+    "return a 504 error response with small timeout enabled" in {
+      val name = "a-large-pmml-model"
+      val deployConfig = DeployConfig(requestTimeoutMs=Some(1))
+      val deployResponse = deployModelWithConfig(name, "xgb-iris.pmml", `text/xml(UTF-8)`, deployConfig)
+
+      val nLoop = 3
+      for (_ <- 0 until nLoop) {
+        Post(s"/v1/models/${name}", HttpEntity(`application/json`,
+          """{"X": {"columns": ["sepal_length", "sepal_width", "petal_length", "petal_width"],
+            |"data":[[5.1, 3.5, 1.4, 0.2], [7, 3.2, 4.7, 1.4], [5.8, 2.7, 5.1, 1.9]]}}""".stripMargin)) ~>
+          addHeader(RawHeader("Content-Type", "application/json")) ~> route ~> check {
+          if (status == StatusCodes.OK) {
+            log.warn("Your computer is more powerful, please send more rows to reproduce timeout")
+          } else {
+            status shouldEqual StatusCodes.GatewayTimeout
+            val actual = responseAs[com.autodeployai.serving.errors.Error]
+            actual.error.contains(s"A request to $name:${deployResponse.version} exceeded timeout") shouldEqual true
+          }
+        }
+      }
       undeployModel(name)
     }
   }

@@ -19,7 +19,7 @@ package com.autodeployai.serving
 import akka.http.scaladsl.model.ContentTypes.{`application/json`, `application/octet-stream`}
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.{HttpEntity, StatusCodes}
-import com.autodeployai.serving.model.{InferenceResponse, MetadataTensor, ModelMetadataV2}
+import com.autodeployai.serving.model.{DeployConfig, InferenceResponse, MetadataTensor, ModelMetadataV2}
 
 class OnnxHttpV2Spec extends BaseHttpSpec {
 
@@ -88,6 +88,31 @@ class OnnxHttpV2Spec extends BaseHttpSpec {
 
       undeployModel(name)
     }
-  }
 
+    "return a 504 error response with small timeout enabled" in {
+      val name = "an-onnx-model-timeout"
+      val deployConfig = DeployConfig(requestTimeoutMs=Some(1))
+      val deployResponse = deployModelWithConfig(name, "mnist.onnx", `application/octet-stream`, deployConfig)
+
+      val nLoop = 3
+      for (_ <- 0 until nLoop) {
+        val input0 = getResource("mnist_request_v2_0.json")
+        Post(s"/v2/models/$name/versions/${deployResponse.version}/infer", HttpEntity.fromPath(`application/json`, input0)) ~>
+          addHeader(RawHeader("Content-Type", "application/json")) ~> route ~> check {
+          if (status == StatusCodes.OK) {
+            log.warn("Your computer is more powerful, please set nBatch to a bigger number to reproduce timeout")
+          } else {
+            status shouldEqual StatusCodes.GatewayTimeout
+            val actual = responseAs[com.autodeployai.serving.errors.Error]
+            actual.error.contains(s"A request to $name:${deployResponse.version} exceeded timeout") shouldEqual true
+          }
+        }
+      }
+
+      // Wait for a while to make sure the pending requests are done
+      Thread.sleep(10000)
+      undeployModel(name)
+    }
+
+  }
 }

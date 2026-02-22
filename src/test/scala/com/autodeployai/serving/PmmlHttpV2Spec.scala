@@ -226,6 +226,34 @@ class PmmlHttpV2Spec extends BaseHttpSpec {
       undeployModel(name)
     }
 
+    "return a 504 error response with small timeout enabled" in {
+      val name = "a-large-pmml-model"
+      val deployConfig = DeployConfig(requestTimeoutMs=Some(1))
+      val deployResponse = deployModelWithConfig(name, "xgb-iris.pmml", `text/xml(UTF-8)`, deployConfig)
+
+      val nLoop = 3
+      for (_ <- 0 until nLoop) {
+        Post(s"/v2/models/${name}/infer", HttpEntity(`application/json`,
+          """{"id": "42",
+            |"inputs": [
+            |{"name": "sepal_length", "shape": [3], "datatype": "FP64", "data": [5.1, 7, 5.8]},
+            |{"name": "sepal_width", "shape": [3], "datatype": "FP64", "data": [3.5, 3.2, 2.7]},
+            |{"name": "petal_length", "shape": [3], "datatype": "FP64", "data": [1.4, 4.7, 5.1]},
+            |{"name": "petal_width", "shape": [3], "datatype": "FP64", "data": [0.2, 1.4, 1.9]}
+            |]
+            |}""".stripMargin)) ~>
+          addHeader(RawHeader("Content-Type", "application/json")) ~> route ~> check {
+            if (status == StatusCodes.OK) {
+              log.warn("Your computer is more powerful, please send more rows to reproduce timeout")
+            } else {
+              status shouldEqual StatusCodes.GatewayTimeout
+              val actual = responseAs[com.autodeployai.serving.errors.Error]
+              actual.error.contains(s"A request to $name:${deployResponse.version} exceeded timeout") shouldEqual true
+            }
+        }
+      }
+      undeployModel(name)
+    }
   }
 
 }

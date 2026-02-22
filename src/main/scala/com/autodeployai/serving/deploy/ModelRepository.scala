@@ -16,11 +16,9 @@
 
 package com.autodeployai.serving.deploy
 
-import com.autodeployai.serving.utils.Constants
 import com.typesafe.config.Config
 import org.slf4j.{Logger, LoggerFactory}
 
-import java.util.concurrent.TimeUnit
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration.FiniteDuration
 
@@ -36,9 +34,6 @@ class ModelRepository(val modelName: String, val config: Option[Config]=None) ex
   // Multiple versions
   val models: TrieMap[String, PredictModel] = TrieMap.empty
 
-  // Timeout for versions
-  private val timeouts: TrieMap[String, FiniteDuration] = TrieMap.empty
-
   // The latest version that will vary anytime
   var latestVersion: Option[String] = None
 
@@ -49,7 +44,6 @@ class ModelRepository(val modelName: String, val config: Option[Config]=None) ex
 
   def put(version: String, model: PredictModel): ModelRepository = {
     models.put(version, model)
-    readTimeoutDuration(version).foreach(x => timeouts.put(version, x))
     this
   }
 
@@ -84,22 +78,5 @@ class ModelRepository(val modelName: String, val config: Option[Config]=None) ex
 
   override def close(): Unit = {
     models.foreach(x => x._2.close())
-  }
-
-  def getTimeoutDuration(modelVersion: Option[String] = None): Option[FiniteDuration] = {
-    modelVersion.orElse(latestVersion).flatMap(x => timeouts.get(x))
-  }
-
-  private def readTimeoutDuration(version: String): Option[FiniteDuration] = {
-    val model = models.get(version)
-    val timeout = model.flatMap(_.config()).flatMap(x =>
-      if (x.hasPath(Constants.CONFIG_REQUEST_TIMEOUT_MS)) Some(x.getLong(Constants.CONFIG_REQUEST_TIMEOUT_MS)) else None
-    ).getOrElse(
-      config.flatMap(x=> if (x.hasPath(Constants.CONFIG_REQUEST_TIMEOUT_MS)) Some(x.getLong(Constants.CONFIG_REQUEST_TIMEOUT_MS)) else None).getOrElse(0L)
-    )
-    if (timeout > 0) {
-      log.info(s"Timeout configured for model $modelName:$version with the timeout ${timeout}ms")
-      Some(FiniteDuration(timeout, TimeUnit.MILLISECONDS))
-    } else None
   }
 }

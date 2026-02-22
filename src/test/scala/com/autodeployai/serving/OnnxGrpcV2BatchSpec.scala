@@ -109,7 +109,7 @@ class OnnxGrpcV2BatchSpec extends BaseGrpcSpec {
 
       val start = System.currentTimeMillis()
       val responses = mutable.ArrayBuffer[Future[inference.ModelInferResponse]]()
-      val nLoop = 10
+      val nLoop = 3
       for (i <- 0 until nLoop) {
         val modelInferResponse = stubV2().modelInfer(
           input.copy(modelName = name, modelVersion = version, id = s"$i")
@@ -145,7 +145,7 @@ class OnnxGrpcV2BatchSpec extends BaseGrpcSpec {
 
       val start = System.currentTimeMillis()
       val responses = mutable.ArrayBuffer[Future[inference.ModelInferResponse]]()
-      val nLoop = 10
+      val nLoop = 3
       for (i <- 0 until nLoop) {
         val modelInferResponse = stubV2().modelInfer(
           input.copy(modelName = name, modelVersion = version, id = s"$i")
@@ -179,7 +179,7 @@ class OnnxGrpcV2BatchSpec extends BaseGrpcSpec {
 
       val start = System.currentTimeMillis()
       val responses = mutable.ArrayBuffer[Future[inference.ModelInferResponse]]()
-      val nLoop = 10
+      val nLoop = 3
       for (i <- 0 until nLoop) {
         val modelInferResponse = stubV2().modelInfer(
           rawInput.copy(

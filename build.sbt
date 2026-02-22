@@ -3,7 +3,7 @@ name := (sys.props.getOrElse("gpu", "false") match {
   case _            => "ai-serving"
 })
 
-version := "2.1.0"
+version := "2.2.0"
 
 organization := "com.autodeployai"
 

@@ -9,3 +9,5 @@
 /src/test/resources/response_0.pb
 /.bloop/
 /.metals/
+/.bsp/
+/examples/.ipynb_checkpoints

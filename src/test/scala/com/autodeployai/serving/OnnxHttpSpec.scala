@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2025 AutoDeployAI
+ * Copyright (c) 2019-2026 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import akka.http.scaladsl.model.ContentTypes.{`application/json`, `application/o
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.{HttpEntity, StatusCodes}
 import akka.util.ByteString
-import com.autodeployai.serving.model.{DeployConfig, ModelInfo, PredictResponse}
+import com.autodeployai.serving.model.{DeployConfig, InferenceRequest, ModelInfo, PredictResponse, RequestInput}
 import com.autodeployai.serving.utils.Utils
 
 import scala.concurrent.Future
@@ -165,18 +165,42 @@ class OnnxHttpSpec extends BaseHttpSpec {
     }
 
     "deploy an ONNX model with warmup enabled using zero data" in {
-      val name = "a-pmml-model"
+      val name = "an-onnx-model"
       val deployConfig = DeployConfig(warmupCount=Some(100), warmupDataType=Some("zero"))
       deployModelWithConfig(name, "mnist.onnx", `application/octet-stream`, deployConfig)
       undeployModel(name)
     }
 
     "deploy an ONNX model with warmup enabled using random data" in {
-      val name = "a-pmml-model"
+      val name = "an-onnx-model"
       val deployConfig = DeployConfig(warmupCount=Some(100), warmupDataType=Some("random"))
       deployModelWithConfig(name, "mnist.onnx", `application/octet-stream`, deployConfig)
       undeployModel(name)
     }
-  }
 
+    "return a 504 error response with small timeout enabled" in {
+      val name = "an-onnx-model-timeout"
+      val deployConfig = DeployConfig(requestTimeoutMs=Some(1))
+      val deployResponse = deployModelWithConfig(name, "mnist.onnx", `application/octet-stream`, deployConfig)
+
+      val nLoop = 3
+      for (_ <- 0 until nLoop) {
+        val input0 = getResource("mnist_request_0.json")
+        Post(s"/v1/models/${name}/versions/${deployResponse.version}", HttpEntity.fromPath(`application/json`, input0)) ~>
+          addHeader(RawHeader("Content-Type", "application/json")) ~> route ~> check {
+          if (status == StatusCodes.OK) {
+            log.warn("Your computer is more powerful, please set nBatch to a bigger number to reproduce timeout")
+          } else {
+            status shouldEqual StatusCodes.GatewayTimeout
+            val actual = responseAs[com.autodeployai.serving.errors.Error]
+            actual.error.contains(s"A request to $name:${deployResponse.version} exceeded timeout") shouldEqual true
+          }
+        }
+      }
+
+      // Wait for a while to make sure the pending requests are done
+      Thread.sleep(10000)
+      undeployModel(name)
+    }
+  }
 }

@@ -48,13 +48,13 @@ case class InputsWrapper(inputs: java.util.Map[String, OnnxTensor]) extends Auto
   }
 }
 
-class OnnxOptions extends RunOptions {
-  @volatile
-  private var closed: Boolean = false
+class OnnxOptions extends CancelOptions {
+  @volatile private var closed: Boolean = false
 
   private val runOptions = new ai.onnxruntime.OrtSession.RunOptions
 
   override def terminate(): Unit = {
+    super.terminate()
     if (!closed) {
       try {
         runOptions.setTerminate(true)
@@ -86,6 +86,9 @@ class OnnxModel(val session: OrtSession,
                )(implicit ec: ExecutionContext) extends PredictModel {
 
   val log: Logger = LoggerFactory.getLogger(this.getClass)
+
+  // Inference timeout
+  override val timeout: Long = parseTimeout()
 
   // Create batch processor if it's supported and properly configured
   override val batchProcessorV2: Option[BatchProcessor[InferenceRequest, InferenceResponse]] =
@@ -139,7 +142,7 @@ class OnnxModel(val session: OrtSession,
   // Start the warmup process if it's configured properly.
   warmup()
 
-  override def predict(request: PredictRequest, options: RunOptions): PredictResponse = {
+  override def predict(request: PredictRequest, options: Option[RunOptions]): PredictResponse = {
 
     val requestedOutput = request.filter.flatMap(x => toOption(x)).map(x => {
       val set = new util.HashSet[String]()
@@ -151,13 +154,16 @@ class OnnxModel(val session: OrtSession,
       set
     }).getOrElse(outputNames)
 
+    val opt = options.orNull
+    val onnxOpt = options.map(_.getUnderlineObject[ai.onnxruntime.OrtSession.RunOptions]).orNull
     try {
       val result: RecordSpec = if (request.X.records.isDefined) {
         RecordSpec(records = request.X.records.map(records => {
           records.map(record => {
             Using.Manager { use =>
+              checkCancelled(options)
               val wrapper = use(createInputsWrapper(record))
-              val result = use(session.run(wrapper.inputs, requestedOutput))
+              val result = use(session.run(wrapper.inputs, requestedOutput, onnxOpt))
 
               val outputs = Map.newBuilder[String, Any]
               outputs.sizeHint(result.size())
@@ -182,8 +188,9 @@ class OnnxModel(val session: OrtSession,
           data.map(values => {
             val record = columns.zip(values).toMap
             Using.Manager { use =>
+              checkCancelled(options)
               val wrapper = use(createInputsWrapper(record))
-              val result = use(session.run(wrapper.inputs, requestedOutput))
+              val result = use(session.run(wrapper.inputs, requestedOutput, onnxOpt))
 
               val outputs = Seq.newBuilder[Any]
               outputs.sizeHint(result.size())
@@ -212,21 +219,14 @@ class OnnxModel(val session: OrtSession,
 
       PredictResponse(result)
     } catch {
-      case ex: OrtException =>
-        if (ex.getCode == OrtErrorCode.ORT_FAIL && ex.getMessage.contains("Exiting due to terminate flag being set to true")) {
-          log.warn(s"An error occurred from ONNXRuntime: $ex")
-          throw InferTimeoutException(modelName, Option(modelVersion))
-        } else {
-          throw ex
-        }
       case ex: Throwable =>
-        throw ex
+        handelOrtFailure(ex)
       } finally {
-      Utils.safeClose(options)
+      Utils.safeClose(opt)
     }
   }
 
-  override def predict(request: InferenceRequest, options: RunOptions): InferenceResponse = {
+  override def predict(request: InferenceRequest, options: Option[RunOptions]): InferenceResponse = {
     val requestedOutput = request.outputs.map(x => {
       val set = new util.HashSet[String]()
       x.foreach(output => {
@@ -244,14 +244,18 @@ class OnnxModel(val session: OrtSession,
     }
 
     Using.Manager { use =>
-      val opt = use(options)
+      val opt = if (options.isDefined) use(options.orNull) else null
+      val onnxOpt = if (opt != null) opt.getUnderlineObject[ai.onnxruntime.OrtSession.RunOptions] else null
+      checkCancelled(options)
       val wrapper = use(createInputsWrapperV2(inputs))
-      val result = use(session.run(
-        wrapper.inputs,
-        requestedOutput,
-        opt.getUnderlineObject[ai.onnxruntime.OrtSession.RunOptions])
+      checkCancelled(options)
+      val result = use(
+        session.run(
+          wrapper.inputs,
+          requestedOutput,
+          onnxOpt
+        )
       )
-
       val outputs = Seq.newBuilder[ResponseOutput]
       outputs.sizeHint(result.size())
       val it = result.iterator()
@@ -303,18 +307,21 @@ class OnnxModel(val session: OrtSession,
         parameters=request.parameters,
         outputs=value
       )
-      case Failure(ex)    => ex match {
-        case ex: OrtException =>
-          if (ex.getCode == OrtErrorCode.ORT_FAIL && ex.getMessage.contains("Exiting due to terminate flag being set to true")) {
-            log.warn(s"An error occurred from ONNXRuntime: $ex")
-            throw InferTimeoutException(modelName, Option(modelVersion))
-          } else {
-            throw ex
-          }
-        case _ =>
-          throw ex
-      }
+      case Failure(ex)    =>
+        handelOrtFailure(ex)
     }
+  }
+
+  private def handelOrtFailure(ex: Throwable) = ex match {
+    case ex: OrtException =>
+      if (ex.getCode == OrtErrorCode.ORT_FAIL && ex.getMessage.contains("Exiting due to terminate flag being set to true")) {
+        log.warn(s"An error occurred from ONNXRuntime: $ex")
+        throw InferTimeoutException(modelName, Option(modelVersion), timeout)
+      } else {
+        throw ex
+      }
+    case _ =>
+      throw ex
   }
 
   /**
@@ -322,8 +329,8 @@ class OnnxModel(val session: OrtSession,
    *
    * @return
    */
-  override def newRunOptions(): OnnxOptions = {
-    new OnnxOptions
+  override def newRunOptions(): Option[OnnxOptions] = {
+    if (timeout > 0L) Some(new OnnxOptions) else None
   }
 
   override def `type`(): String = "ONNX"
@@ -598,7 +605,7 @@ class OnnxModel(val session: OrtSession,
   }
 
   override def warmup(): Unit = {
-    val (warmupCount, warmupDataType) = warmupConfig()
+    val (warmupCount, warmupDataType) = parseWarmup()
     if (warmupCount > 0) {
       log.info(s"Warmup for the model $modelName:$modelVersion initialized: warmup-count=$warmupCount, warmup-data-type=$warmupDataType")
       val start = System.currentTimeMillis()

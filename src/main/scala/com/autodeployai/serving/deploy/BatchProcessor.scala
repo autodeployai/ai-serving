@@ -27,20 +27,20 @@ import scala.concurrent.{ExecutionContext, Future, Promise}
 trait BatchRequest[Request, Response] {
   def request: Request
   def promise: Promise[Response]
-  def options: RunOptions
+  def options: Option[RunOptions]
   def timestamp: Long
 }
 
 case class BatchRequestV2(
   request: InferenceRequest,
   promise: Promise[InferenceResponse],
-  options: RunOptions,
+  options: Option[RunOptions],
   timestamp: Long = System.currentTimeMillis(),
 ) extends BatchRequest[InferenceRequest, InferenceResponse]
 
 trait BatchProcessor[Request, Response] extends AutoCloseable {
 
-  def predict(request: Request, options: RunOptions): Future[Response]
+  def predict(request: Request, options: Option[RunOptions]): Future[Response]
 
   def merge(requests: Array[Request]): Request
 
@@ -76,7 +76,7 @@ class BatchProcessorV2(model: PredictModel,
 
   log.info(s"BatchProcessor for model ${model.modelName}:${model.modelVersion} initialized: max-batch-size=$maxBatchSize, max-batch-delay-ms=$maxBatchDelayMs")
 
-  override def predict(request: InferenceRequest, options: RunOptions): Future[InferenceResponse] = {
+  override def predict(request: InferenceRequest, options: Option[RunOptions]): Future[InferenceResponse] = {
     if (enabled) {
       val promise = Promise[InferenceResponse]()
       val batchRequest = BatchRequestV2(request=request, promise=promise, options=options)
@@ -147,7 +147,7 @@ class BatchProcessorV2(model: PredictModel,
           batch.foreach(_.promise.failure(ex))
       } finally {
         // Close options of other requests
-        batch.tail.foreach(x => Utils.safeClose(x.options))
+        batch.tail.foreach(x => Utils.safeClose(x.options.orNull))
       }
     }
   }

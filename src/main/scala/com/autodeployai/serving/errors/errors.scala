@@ -58,5 +58,5 @@ case class InvalidInputException(field: String, shape: Seq[Long], elementCount: 
 case class InvalidInputDataException(field: String) extends
   BaseException(s"The input $field tensor data expected but scalar or map got")
 
-case class InferTimeoutException(modelName: String, modelVersion: Option[String], timeout: Long = 0) extends
-  BaseException(s"A request to $modelName:${modelVersion.getOrElse("latest")} exceeded timeout${if (timeout > 0) s" of $timeout milliseconds" else ""}")
+case class InferTimeoutException(modelName: String, modelVersion: Option[String], timeout: Long) extends
+  BaseException(s"A request to $modelName:${modelVersion.getOrElse("latest")} exceeded timeout of $timeout milliseconds")
