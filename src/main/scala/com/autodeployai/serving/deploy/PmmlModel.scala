@@ -41,6 +41,9 @@ class PmmlModel(val model: Model,
 
   val log: Logger = LoggerFactory.getLogger(this.getClass)
 
+  // Inference timeout
+  override val timeout: Long = parseTimeout()
+
   private val inputSchema = model.inputSchema
 
   private val outputTypes = model.outputFields.map(x => x.name -> x.dataType).toMap
@@ -48,12 +51,13 @@ class PmmlModel(val model: Model,
   // Start the warmup process if it's configured properly.
   warmup()
 
-  override def predict(request: PredictRequest, options: RunOptions): PredictResponse = {
+  override def predict(request: PredictRequest, options: Option[RunOptions]): PredictResponse = {
     val filter = request.filter.orNull
 
     val result = if (request.X.records.isDefined) {
       RecordSpec(records = request.X.records.map(records => {
         records.map(record => {
+          checkCancelled(options)
           val outputs = model.predict(Series.fromMap(record, inputSchema))
           outputs.filter(filter).asMap
         })
@@ -63,6 +67,7 @@ class PmmlModel(val model: Model,
       var outputColumns: Seq[String] = null
       val outputData = request.X.data.map(data => {
         data.map(values => {
+          checkCancelled(options)
           val record = columns.zip(values).toMap
           val output = model.predict(Series.fromMap(record, inputSchema))
           val finalOutput = output.filter(filter)
@@ -78,7 +83,7 @@ class PmmlModel(val model: Model,
     PredictResponse(result)
   }
 
-  override def predict(request: InferenceRequest, options: RunOptions): InferenceResponse = {
+  override def predict(request: InferenceRequest, options: Option[RunOptions]): InferenceResponse = {
     val filter = request.outputs.map(x => x.map(y => y.name)).orNull
 
     val names = request.inputs.map(x => x.name)
@@ -107,6 +112,7 @@ class PmmlModel(val model: Model,
       val record = names.zip(data.map(x =>
         if (i < x.length) x(i) else null
       )).toMap
+      checkCancelled(options)
       val output = model.predict(Series.fromMap(record, inputSchema))
       val finalOutput = output.filter(filter)
       if (outputColumns.isEmpty) {
@@ -121,6 +127,7 @@ class PmmlModel(val model: Model,
     outputs.sizeHint(columnsCount)
     var j = 0
     while (j < columnsCount) {
+      checkCancelled(options)
       val dataType = outputTypes(outputColumns(j))
       val data = dataType match {
         case IntegerType =>
@@ -179,8 +186,8 @@ class PmmlModel(val model: Model,
    *
    * @return
    */
-  override def newRunOptions(): RunOptions = {
-    null
+  override def newRunOptions(): Option[RunOptions] = {
+    if (timeout > 0 ) Some(new CancelOptions) else None
   }
 
   override def `type`(): String = "PMML"
@@ -219,7 +226,7 @@ class PmmlModel(val model: Model,
     Field(field.name, field.dataType.toString, Option(field.opType.toString), values = Utils.toOption(field.valuesAsString))
 
   override def warmup(): Unit = {
-    val (warmupCount, warmupDataType) = warmupConfig()
+    val (warmupCount, warmupDataType) = parseWarmup()
     if (warmupCount > 0) {
       log.info(s"Warmup for the model $modelName:$modelVersion initialized: warmup-count=$warmupCount, warmup-data-type=$warmupDataType")
       val start = System.currentTimeMillis()

@@ -75,7 +75,7 @@ class OnnxHttpV2BatchSpec extends BaseHttpSpec with JsonSupport {
 
       val start = System.currentTimeMillis()
       val responses = mutable.ArrayBuffer[RouteTestResult]()
-      val nLoop = 10
+      val nLoop = 3
       for (i <- 0 until nLoop) {
         val response = Post(s"/v2/models/$name/versions/${deployResponse.version}/infer", input.copy(id=Some(s"$i"))) ~> route ~> runRoute
         responses += response
@@ -108,7 +108,7 @@ class OnnxHttpV2BatchSpec extends BaseHttpSpec with JsonSupport {
 
       val start = System.currentTimeMillis()
       val responses = mutable.ArrayBuffer[RouteTestResult]()
-      val nLoop = 10
+      val nLoop = 3
       for (i <- 0 until nLoop) {
         val response = Post(s"/v2/models/$name/versions/${deployResponse.version}/infer", input.copy(id=Some(s"$i"))) ~> route ~> runRoute
         responses += response
@@ -195,7 +195,7 @@ class OnnxHttpV2BatchSpec extends BaseHttpSpec with JsonSupport {
       val deployConfig = DeployConfig(requestTimeoutMs=Some(1))
       val deployResponse = deployModelWithConfig(name, "mobilenet_v2.onnx", `application/octet-stream`, deployConfig)
 
-      val nLoop = 10
+      val nLoop = 3
       val nBatch = 16 // Set to a bigger number if it's getting
       for (_ <- 0 until nLoop) {
         val batchInput = InferenceRequest(

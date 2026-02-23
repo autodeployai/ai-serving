@@ -1,0 +1,20 @@
+name: Unittest
+on:
+  push:
+    branches: [master, main]
+permissions:
+  contents: read
+
+jobs:
+  unittest:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: sbt
+      - run: sbt test

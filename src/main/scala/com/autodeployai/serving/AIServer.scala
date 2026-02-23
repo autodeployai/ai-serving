@@ -39,6 +39,12 @@ object AIServer extends Endpoints with EndpointsV2 {
   if (config.hasPath(defaultFixedPoolSizePath)) {
     var numCores = config.getInt(defaultFixedPoolSizePath)
     if (numCores == -1) {
+      val onnxBackend = if (config.hasPath("onnxruntime.backend")) config.getString("onnxruntime.backend").toLowerCase else "cpu"
+      val onnxThreads = if (config.hasPath("onnxruntime.cpu-num-threads")) config.getInt("onnxruntime.cpu-num-threads") else -1
+
+      if (onnxBackend == "cpu" && onnxThreads == -1) {
+        log.warn("Please reserve sufficient CPU capacity for ONNX Runtime to prevent oversubscription when serving ONNX models on CPU.")
+      }
       numCores = Utils.getNumCores
     }
     config = config.withValue(defaultFixedPoolSizePath, ConfigValueFactory.fromAnyRef(numCores))

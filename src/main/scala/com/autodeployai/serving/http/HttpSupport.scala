@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 AutoDeployAI
+ * Copyright (c) 2025, 2026 AutoDeployAI
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,25 @@ import akka.http.scaladsl.model.HttpRequest
 import akka.http.scaladsl.server.{Directive0, RouteResult}
 import akka.http.scaladsl.server.RouteResult.{Complete, Rejected}
 import akka.http.scaladsl.server.directives.{DebuggingDirectives, LogEntry, LoggingMagnet}
+import akka.http.scaladsl.server.Directives.pass
+import com.typesafe.config.ConfigFactory
 
 trait HttpSupport {
+  private val config = ConfigFactory.load()
+
+  private val requestTimingEnabled: Boolean =
+    if (config.hasPath("service.logging.request-timing-enabled")) config.getBoolean("service.logging.request-timing-enabled") else true
+
+  private val requestTimingLogLevel: LogLevel = {
+    val level = if (config.hasPath("service.logging.request-timing-level")) config.getString("service.logging.request-timing-level").toUpperCase else "INFO"
+    level match {
+      case "DEBUG" => Logging.DebugLevel
+      case "WARNING" => Logging.WarningLevel
+      case "ERROR" => Logging.ErrorLevel
+      case _ => Logging.InfoLevel
+    }
+  }
+
   private def akkaResponseTimeLoggingFunction(loggingAdapter: LoggingAdapter,
                                               requestTimestamp: Long,
                                               level: LogLevel = Logging.InfoLevel)(req: HttpRequest)(res: RouteResult): Unit = {
@@ -40,8 +57,9 @@ trait HttpSupport {
 
   private def printResponseTime(log: LoggingAdapter) = {
     val requestTimestamp = System.nanoTime
-    akkaResponseTimeLoggingFunction(log, requestTimestamp)_
+    akkaResponseTimeLoggingFunction(log, requestTimestamp, requestTimingLogLevel)_
   }
 
-  val logResponseTime: Directive0 = DebuggingDirectives.logRequestResult(LoggingMagnet(printResponseTime))
+  val logResponseTime: Directive0 =
+    if (requestTimingEnabled) DebuggingDirectives.logRequestResult(LoggingMagnet(printResponseTime)) else pass
 }
