@@ -201,7 +201,7 @@ To deploy and undeploy a model via the deployment API, refer to the following RE
 ## REST APIs
 
 ### v2 REST APIs
-They are fully compatible with [Predict Protocol - Version 2](https://github.com/kserve/kserve/blob/master/docs/predict-api/v2/required_api.md)
+They are fully compatible with [Predict Protocol - Version 2](https://github.com/kserve/open-inference-protocol)
 
 ### v1 REST APIs
 
