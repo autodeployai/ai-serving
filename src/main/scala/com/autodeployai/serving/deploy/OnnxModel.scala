@@ -283,8 +283,9 @@ class OnnxModel(val session: OrtSession,
                   case OnnxJavaType.INT8 | OnnxJavaType.UINT8 =>
                     tensor.getByteBuffer.array()
                   case OnnxJavaType.BOOL    =>
-                    tensor.getByteBuffer.array().map(x => x != 0)
-                  case OnnxJavaType.INT16   => tensor.getShortBuffer.array()
+                    DataUtils.convertToBooleanArray(tensor.getByteBuffer.array())
+                  case OnnxJavaType.INT16   =>
+                    tensor.getShortBuffer.array()
                   case _ => OutputNotSupportedException(entry.getKey, info.`type`.toString)
                 }
               }

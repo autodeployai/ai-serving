@@ -11,3 +11,4 @@
 /.metals/
 /.bsp/
 /examples/.ipynb_checkpoints
+/examples/__pycache__/

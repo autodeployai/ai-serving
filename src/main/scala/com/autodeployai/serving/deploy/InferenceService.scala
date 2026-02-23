@@ -24,10 +24,11 @@ import com.autodeployai.serving.utils.Utils.toOption
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import org.slf4j.{Logger, LoggerFactory}
 
-import java.util.{Timer, TimerTask}
+import java.util.concurrent.{Executors, ScheduledExecutorService, ThreadFactory, TimeUnit}
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.util.Using
 
 /**
  * Main entry of models validation, management and deployment.
@@ -48,6 +49,14 @@ object InferenceService extends JsonSupport {
   log.info(s"Models locates at: $modelsPath")
 
   private val repositories: TrieMap[String, ModelRepository] = TrieMap.empty
+
+  // Timeout scheduler
+  private val timeoutScheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor(
+    (r: Runnable) => {
+      val thread = new Thread(r, "ai-serving-timeout-scheduler")
+      thread.setDaemon(true)
+      thread
+    })
 
   // A flag if the inference service is ready to response requests
   var isReady = false
@@ -82,16 +91,16 @@ object InferenceService extends JsonSupport {
   def loadModels()(implicit ec: ExecutionContext): Unit = {
     log.info(s"Loading models under the directory: $modelsPath")
 
-    val files = Files.list(modelsPath)
-    val it = files.iterator()
-    while (it.hasNext) {
-      val path = it.next()
-      if (Files.isDirectory(path)) {
-        val modelRepository = loadModel(path)
-        modelRepository.foreach(x => repositories.put(x.modelName, x))
+    Using(Files.list(modelsPath)) { files =>
+      val it = files.iterator()
+      while (it.hasNext) {
+        val path = it.next()
+        if (Files.isDirectory(path)) {
+          val modelRepository = loadModel(path)
+          modelRepository.foreach(x => repositories.put(x.modelName, x))
+        }
       }
     }
-
     isReady = true
   }
 
@@ -519,26 +528,27 @@ object InferenceService extends JsonSupport {
     val modelRepository = new ModelRepository(modelName, modelConfig)
 
     val versions = ArrayBuffer.empty[String]
-    val files = Files.list(modelPath)
-    val it = files.iterator()
-    while (it.hasNext) {
-      val path = it.next()
-      if (Files.isDirectory(path)) {
-        val modelVersion = path.getFileName.toString
-        versions += modelVersion
-        val (modelObjectPath, modelType) = getModelObjectPath(path)
-        if (modelObjectPath != null) {
-          try {
-            log.info(s"Loading model: $modelName with the version $modelVersion")
+    Using(Files.list(modelPath)) { files =>
+      val it = files.iterator()
+      while (it.hasNext) {
+        val path = it.next()
+        if (Files.isDirectory(path)) {
+          val modelVersion = path.getFileName.toString
+          versions += modelVersion
+          val (modelObjectPath, modelType) = getModelObjectPath(path)
+          if (modelObjectPath != null) {
+            try {
+              log.info(s"Loading model: $modelName with the version $modelVersion")
 
-            // Load the version config
-            val versionConfig = getModelConfig(path)
+              // Load the version config
+              val versionConfig = getModelConfig(path)
 
-            val model = PredictModel.load(modelObjectPath, modelType, modelName, modelVersion, versionConfig.orElse(modelConfig))
-            modelRepository.put(modelVersion, model)
-          } catch {
-            case e: Exception =>
-              log.error(s"Failed to load model $modelName with the version $modelVersion caused: $e")
+              val model = PredictModel.load(modelObjectPath, modelType, modelName, modelVersion, versionConfig.orElse(modelConfig))
+              modelRepository.put(modelVersion, model)
+            } catch {
+              case e: Exception =>
+                log.error(s"Failed to load model $modelName with the version $modelVersion caused: $e")
+            }
           }
         }
       }
@@ -594,23 +604,23 @@ object InferenceService extends JsonSupport {
     val timeout = model.timeout
     if (timeout > 0) {
       val promise = Promise[T]()
-      val task = new TimerTask {
-        override def run(): Unit = {
-          if (!promise.isCompleted) {
-            runOptions.foreach(_.terminate())
-            promise.tryFailure(InferTimeoutException(model.modelName, Option(model.modelVersion), timeout))
+      val timeoutFuture = timeoutScheduler.schedule(
+        new Runnable {
+          override def run(): Unit = {
+            if (!promise.isCompleted) {
+              runOptions.foreach(_.terminate())
+              promise.tryFailure(InferTimeoutException(model.modelName, Option(model.modelVersion), timeout))
+            }
           }
-        }
-      }
-      val timer = new Timer(true)
-      timer.schedule(task, timeout)
+        },
+        timeout,
+        TimeUnit.MILLISECONDS
+      )
       future.onComplete { result =>
-        timer.cancel()
+        timeoutFuture.cancel(false)
         promise.tryComplete(result)
       }
       promise.future
     } else future
   }
-
 }
-

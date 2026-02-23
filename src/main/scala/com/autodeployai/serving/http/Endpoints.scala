@@ -167,7 +167,9 @@ trait Endpoints extends JsonSupport with HttpSupport {
               }
             case "application/vnd.google.protobuf" | "application/x-protobuf" | "application/octet-stream"  =>
               extractDataBytes { data =>
-                val bytesFut: Future[ByteString] = data.runFold(ByteString.empty) { case (acc, b) => acc ++ b }
+                val bytesFut: Future[ByteString] = data.runFold(ByteString.newBuilder) { (builder, chunk) =>
+                  builder ++= chunk
+                }.map(_.result())
                 val predictedPbFut = bytesFut.flatMap { bytes =>
                   val pbRequest = protobuf.PredictRequest.parseFrom(bytes.toArray)
                   val payload = fromPb(pbRequest)
@@ -207,21 +209,22 @@ trait Endpoints extends JsonSupport with HttpSupport {
             // Save model file to temporary location
             val dest = Utils.tempFilePath()
             part.entity.dataBytes.runWith(FileIO.toPath(dest)).map { _ =>
-              log.info(s"A temporary model file $dest created")
-
+              log.debug(s"A temporary model file $dest created")
               modelFileRef.put("model", dest)
               contentTypeRef.put("model", part.entity.contentType)
               ()
             }
           case name if name == "config" || name == "configuration" =>
             // Parse JSON configuration
-            part.entity.dataBytes.runFold(ByteString.empty)(_ ++ _).map { bytes =>
+            part.entity.dataBytes.runFold(ByteString.newBuilder) { (builder, chunk) =>
+              builder ++= chunk
+            }.map(_.result()).map { bytes =>
               val jsonString = bytes.utf8String
               try {
                 if (jsonString.nonEmpty && jsonString.trim.nonEmpty) {
                   val config = jsonString.parseJson.convertTo[DeployConfig]
                   configRef.put("config", config)
-                  log.debug(s"Parsed deployment configuration: $config")
+                  log.info(s"Parsed deployment configuration: $config")
                 }
               } catch {
                 case ex: Exception =>
@@ -256,4 +259,3 @@ trait Endpoints extends JsonSupport with HttpSupport {
     }
   }
 }
-

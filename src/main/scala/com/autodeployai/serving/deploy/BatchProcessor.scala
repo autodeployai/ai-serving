@@ -21,6 +21,7 @@ import com.autodeployai.serving.utils.{DataUtils, Utils}
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.nio.{ByteBuffer, ByteOrder, DoubleBuffer, FloatBuffer, IntBuffer, LongBuffer, ShortBuffer}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{ConcurrentLinkedQueue, Executors, TimeUnit}
 import scala.concurrent.{ExecutionContext, Future, Promise}
 
@@ -53,6 +54,8 @@ class BatchProcessorV2(model: PredictModel,
 
   val log: Logger = LoggerFactory.getLogger(this.getClass)
   private val queue = new ConcurrentLinkedQueue[BatchRequestV2]()
+  private val queueLength = new AtomicInteger(0)
+  private val processing = new AtomicBoolean(false)
   private val enabled: Boolean = maxBatchSize > 1
   private val checkInterval: Long = Math.max(maxBatchDelayMs / 2, 1L)
 
@@ -81,11 +84,10 @@ class BatchProcessorV2(model: PredictModel,
       val promise = Promise[InferenceResponse]()
       val batchRequest = BatchRequestV2(request=request, promise=promise, options=options)
       queue.offer(batchRequest)
+      val currentLength = queueLength.incrementAndGet()
 
-      if (queue.size() >= maxBatchSize) {
-        Future{
-          processBatch()
-        }
+      if (currentLength >= maxBatchSize) {
+        processBatchAsync()
       }
       promise.future
     } else {
@@ -99,18 +101,38 @@ class BatchProcessorV2(model: PredictModel,
     if (!queue.isEmpty) {
       val oldestRequest = queue.peek()
       if (oldestRequest != null && (timestamp - oldestRequest.timestamp) >= maxBatchDelayMs) {
-        processBatch()
+        processBatchAsync()
       }
     }
   }
 
-  private def processBatch(): Unit = this.synchronized {
+  private def processBatchAsync(): Unit = {
+    if (processing.compareAndSet(false, true)) {
+      Future {
+        try {
+          var keepRunning = true
+          while (keepRunning) {
+            val processed = processBatch()
+            keepRunning = processed && queueLength.get() >= maxBatchSize
+          }
+        } finally {
+          processing.set(false)
+          if (queueLength.get() >= maxBatchSize) {
+            processBatchAsync()
+          }
+        }
+      }
+    }
+  }
+
+  private def processBatch(): Boolean = this.synchronized {
     val builder = Array.newBuilder[BatchRequestV2]
     builder.sizeHint(maxBatchSize)
     var exit = false
     while (builder.length < maxBatchSize && !exit) {
       val item = queue.poll()
       if (item != null) {
+        queueLength.decrementAndGet()
         builder += item
       } else {
         exit = true
@@ -128,7 +150,7 @@ class BatchProcessorV2(model: PredictModel,
 
         val startTime = System.currentTimeMillis()
         val batchResponse = model.predict(mergedRequest, options)
-        log.info(s"Batched ${batch.length} requests elapsed time: ${System.currentTimeMillis() - startTime}")
+        log.debug(s"Batched ${batch.length} requests elapsed time: ${System.currentTimeMillis() - startTime}")
 
         val recordCounts = requests.map(req => {
           if (req.inputs.nonEmpty) {
@@ -149,6 +171,9 @@ class BatchProcessorV2(model: PredictModel,
         // Close options of other requests
         batch.tail.foreach(x => Utils.safeClose(x.options.orNull))
       }
+      true
+    } else {
+      false
     }
   }
 
@@ -313,7 +338,7 @@ class BatchProcessorV2(model: PredictModel,
     scheduler.foreach(s =>{
       s.shutdown()
       try {
-        if (s.awaitTermination(5, TimeUnit.SECONDS)) {
+        if (!s.awaitTermination(5, TimeUnit.SECONDS)) {
           s.shutdownNow()
         }
       } catch {
@@ -323,7 +348,7 @@ class BatchProcessorV2(model: PredictModel,
     })
 
     if (!queue.isEmpty) {
-      processBatch()
+      while (processBatch()) {}
     }
   }
 }
