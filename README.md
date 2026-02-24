@@ -1,6 +1,6 @@
 # AI-Serving
 
-Serving AI/ML models in the open standard formats [PMML](http://dmg.org/pmml/v4-4-1/GeneralStructure.html) and [ONNX](https://onnx.ai/) with both HTTP (REST API) and gRPC endpoints.
+Serving AI/ML models in the open standard formats [PMML](https://dmg.org/) and [ONNX](https://onnx.ai/) with both HTTP (REST API) and gRPC endpoints.
 
 ## Table of Contents
 
@@ -43,14 +43,14 @@ Serving AI/ML models in the open standard formats [PMML](http://dmg.org/pmml/v4-
 
 ## Features
 
-AI-Serving is a flexible, high-performance inference system for machine learning and deep learning models, designed for production environments. AI-Serving is a flexible, high-performance inference system for machine learning and deep learning models, designed for production environments.
+AI-Serving is a flexible, high-performance inference system for machine learning and deep learning models, designed for production environments. Its key features include:
 
-- Out-of-the-box support for PMML and ONNX models.
-- HTTP and gRPC APIs for seamless integration.
+- Out-of-the-box support for PMML (Predictive Model Markup Language) and ONNX (Open Neural Network Exchange) models.
+- HTTP (RESTful) and gRPC APIs for seamless integration.
 - Support for both v1 and v2 APIs, with the v2 API fully compatible with the [Open Inference Protocol](https://github.com/kserve/open-inference-protocol).
-- Automatic batching to improve GPU utilization and increase throughput, applicable to only ONNX models.
+- Dynamic batching for ONNX models to improve GPU utilization and increase throughput.
 - Configurable request timeouts for better control in production.
-- Automatic model warm-up before handling inference requests.
+- Model warm-up on startup to ensure low-latency inference.
 
 ## Prerequisites
 
@@ -166,13 +166,24 @@ There are two ways to deploy a PMML or ONNX model into AI-Serving: manual deploy
      - Use the fixed filename `model.pmml` for PMML models.
      - Use the fixed filename `model.onnx` for ONNX models.
   5. Customized inference behavior can be configured in model.conf, which can be placed either in the model directory or within a specific version directory. The following parameters are supported:
-```
-max-batch-size=8
-max-batch-delay-ms=10
-request-timeout-ms=20
-warmup-count=100
-warmup-data-type=zero   // one of zero and random
-```
+     - max-batch-size=8 
+     
+       Specifies the maximum number of inference requests that can be grouped into a single batch. This option is effective only if the deployed ONNX model supports dynamic input shapes.
+     - max-batch-delay-ms=10 (milliseconds)
+
+       The maximum time the server waits to accumulate requests before forming a batch. If the batch does not reach max-batch-size within this time window, it will be executed with the available requests.
+     - request-timeout-ms=20 (milliseconds)
+
+       The maximum time allowed for processing an inference request. Requests exceeding this duration will be terminated or returned with a timeout error (HTTP: 504, gRPC: 4 DEADLINE_EXCEEDED). 
+     - warmup-count=100
+
+       The number of warm-up inference runs executed when the model is loaded.
+     - warmup-data-type=zero (options: `zero`, `random`)
+
+       Specifies the type of input data used during model warm-up.
+       * zero: Uses zero-filled tensors.
+       * random: Uses randomly generated input data matching the model’s input shape and type.
+
   6. All models placed in this directory structure will be automatically loaded when AI-Serving starts.
 
 Refer to the following example for guidance:
